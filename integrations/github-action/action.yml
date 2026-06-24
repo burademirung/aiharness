@@ -1,0 +1,71 @@
+name: AIHarness Scan
+description: >
+  Run an AIHarness security scan on source files in your repository and upload
+  results as SARIF to the GitHub Security tab.
+
+inputs:
+  api-url:
+    description: Base URL of the AIHarness API.
+    required: false
+    default: https://aiharness.degenito.ai
+  api-key:
+    description: >
+      Optional API key (BYO key). Pass via a repository secret:
+      api-key: ${{ secrets.AIHARNESS_API_KEY }}
+    required: false
+    default: ''
+  language:
+    description: >
+      Primary language of the codebase (python, javascript, typescript,
+      java, go, ruby, php, c, cpp, csharp, rust).
+    required: false
+    default: python
+  paths:
+    description: >
+      Space-separated list of paths (relative to the workspace root) to scan.
+      Defaults to the entire workspace.
+    required: false
+    default: '.'
+  fail-on-severity:
+    description: >
+      Fail the job if any finding is at or above this severity level.
+      Accepted values: critical, high, medium, low, none.
+      Use "none" to never fail the job.
+    required: false
+    default: high
+  max-files:
+    description: Maximum number of source files to include in the scan.
+    required: false
+    default: '50'
+  sarif-file:
+    description: Path (relative to the workspace) where the SARIF output is written.
+    required: false
+    default: aiharness.sarif
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Run AIHarness scan
+      shell: bash
+      run: node "${{ github.action_path }}/scan.mjs"
+      env:
+        AIHARNESS_API_URL: ${{ inputs.api-url }}
+        AIHARNESS_API_KEY: ${{ inputs.api-key }}
+        AIHARNESS_LANGUAGE: ${{ inputs.language }}
+        AIHARNESS_PATHS: ${{ inputs.paths }}
+        AIHARNESS_FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
+        AIHARNESS_MAX_FILES: ${{ inputs.max-files }}
+        AIHARNESS_SARIF_FILE: ${{ inputs.sarif-file }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+
+    - name: Upload SARIF to GitHub Security tab
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: aiharness

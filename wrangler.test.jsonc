@@ -1,0 +1,24 @@
+{
+  "name": "aiharness",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "aiharness", "database_id": "PLACEHOLDER_SET_BY_WRANGLER", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "SOURCE", "bucket_name": "aiharness-source" }
+  ],
+  "queues": {
+    "producers": [{ "binding": "SCAN_QUEUE", "queue": "aiharness-scans" }],
+    "consumers": [{ "queue": "aiharness-scans", "max_batch_size": 1, "max_retries": 0 }]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SCAN_RUNNER", "class_name": "ScanRunner" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ScanRunner"] }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "name": "aiharness",
+  "main": "src/index.ts",
+  "account_id": "79fa22cbad976a82e96b8bb969c3f204",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "aiharness.degenito.ai", "custom_domain": true }
+  ],
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "aiharness", "database_id": "19c8f283-db99-4d42-9f47-411601d9255f", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "SOURCE", "bucket_name": "aiharness-source" }
+  ],
+  "queues": {
+    "producers": [{ "binding": "SCAN_QUEUE", "queue": "aiharness-scans" }],
+    // max_retries: 0 — fail-fast by design.  The BYO API key is shredded
+    // in runScan's finally block after the first attempt, so a retry could
+    // not re-run the scan anyway.  runScan records terminal "failed" status
+    // itself, so no retry logic is needed here.  Re-enabling retries would
+    // require persisting the key across attempts (a future enhancement).
+    "consumers": [{ "queue": "aiharness-scans", "max_batch_size": 1, "max_retries": 0 }]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SCAN_RUNNER", "class_name": "ScanRunner" }]
+  },
+  "containers": [
+    { "class_name": "ScanRunner", "image": "./container/Dockerfile", "max_instances": 5, "instance_type": "standard-1" }
+  ],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ScanRunner"] }
+  ]
+}

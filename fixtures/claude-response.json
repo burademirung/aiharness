@@ -1,0 +1,4 @@
+{
+  "valid": "{\"verdict\":\"confirmed\",\"severity\":\"high\",\"explanation\":\"User input is passed to subprocess with shell=True, enabling OS command injection (CWE-78).\",\"remediation\":\"Avoid shell=True; pass an argument list and validate input.\"}",
+  "garbage": "Sure! Here is the analysis: the code is bad."
+}

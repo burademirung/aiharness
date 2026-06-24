@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIHarness — Model-agnostic AI harness for scanning source code for vulnerabilities</title>
+<meta name="description" content="AIHarness is a model-agnostic AI harness that scans source code for security vulnerabilities. Deterministic SAST (Semgrep) plus CWE-grounded, evidence-based AI triage. Outputs SARIF 2.1.0. Deployed on Cloudflare." />
+<meta name="theme-color" content="#f7f8fa" />
+<!-- Progressive-enhancement flag: scroll-reveal start-state is scoped to html.js only,
+     so with JS disabled or if the observer never fires, ALL content is visible by default. -->
+<script>document.documentElement.className += " js";</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="topbar" role="note">
+  <span class="topbar-credit">Built by <strong>Vladimir Kamenev</strong> for <strong>Chevron</strong> · <a class="topbar-phone" href="tel:5123369618">512&#8202;336&#8202;9618</a> · <a class="topbar-phone" href="mailto:burademirung@gmail.com">burademirung@gmail.com</a></span>
+  <a class="gh-blink" href="https://github.com/burademirung/aiharness" target="_blank" rel="noopener" aria-label="View the source on GitHub">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    <span>Source on GitHub</span>
+  </a>
+</div>
+
+<header class="site-header" id="top">
+  <nav class="nav" aria-label="Primary">
+    <a class="brand" href="#top" aria-label="AIHarness home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="28" height="28" role="img" aria-label="AIHarness logo">
+          <path d="M16 2 4 8v8c0 7 5 11 12 14 7-3 12-7 12-14V8L16 2z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M11 16l3.4 3.4L21 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="brand-text">AIHarness</span>
+    </a>
+    <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#demo">Live demo</a></li>
+      <li><a href="#standards">Standards</a></li>
+      <li><a href="#use-cases">Use cases</a></li>
+      <li><a href="#trust">Trust</a></li>
+      <li><a class="nav-cta" href="#demo">Run a scan</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- HERO + ARCHITECTURE — single no-scroll first screen -->
+  <section class="firstscreen" id="architecture" aria-labelledby="hero-title">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="wrap firstscreen-inner">
+
+      <div class="hero-top">
+        <p class="eyebrow reveal">Model-agnostic · Cloudflare-native · SARIF 2.1.0</p>
+        <h1 id="hero-title" class="reveal">A model-agnostic AI harness that scans code for vulnerabilities.</h1>
+        <p class="lede reveal">Deterministic SAST meets evidence-based AI triage — reproducible coverage, model-agnostic adapter, confidence grounded in evidence.</p>
+        <div class="hero-cta reveal">
+          <a class="btn btn-primary" href="#demo">Run a live scan</a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+        <ul class="hero-badges reveal" aria-label="Key properties">
+          <li>BYO-key · envelope-encrypted · shredded</li>
+          <li>Code treated as data</li>
+          <li>Immutable audit log</li>
+        </ul>
+      </div>
+
+      <div class="arch reveal" id="arch" aria-label="Pipeline architecture">
+        <p class="arch-caption">The pipeline — an auditable scan, end to end. <span>Hover any stage for details.</span></p>
+        <div class="arch-scene">
+          <div class="arch-floor" aria-hidden="true"></div>
+          <div class="arch-stage-track" id="arch-track" role="list" aria-label="Pipeline stages"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="section section-alt" aria-labelledby="how-title">
+    <div class="wrap">
+      <header class="section-head reveal">
+        <p class="kicker">The hybrid story</p>
+        <h2 id="how-title">Deterministic floor, intelligent ceiling</h2>
+        <p class="section-sub">Scanners give you reproducibility and stable rule IDs. The model gives you context and clarity. Neither is trusted blindly.</p>
+      </header>
+      <div class="how-grid">
+        <article class="how-card reveal">
+          <span class="how-num">01</span>
+          <h3>Deterministic SAST</h3>
+          <p>Semgrep runs first: reproducible, auditable, with stable rule IDs you can pin and diff across runs. The same code yields the same findings — every time.</p>
+        </article>
+        <article class="how-card reveal">
+          <span class="how-num">02</span>
+          <h3>AI triage as a layer, not an oracle</h3>
+          <p>The model adds context, deduplicates, writes plain-language explanations, and suppresses false positives. It fills a <em>strict JSON schema</em> only — code is passed as data, never as instructions.</p>
+        </article>
+        <article class="how-card reveal">
+          <span class="how-num">03</span>
+          <h3>Evidence-based confidence</h3>
+          <p>Confidence is computed from evidence, not the model's self-rating: <strong>Semgrep ∩ LLM-confirmed = high</strong>; multi-model agreement raises it; LLM-only is labeled <strong>needs review</strong>.</p>
+        </article>
+        <article class="how-card reveal">
+          <span class="how-num">04</span>
+          <h3>Auditable output</h3>
+          <p>Every scan emits <strong>SARIF 2.1.0</strong> plus an immutable audit log — model id, version, prompt hash, ruleset versions — so results are reproducible and defensible.</p>
+        </article>
+      </div>
+      <p class="how-note reveal">BYO key is envelope-encrypted, used only for the scan, then shredded. Your code is never stored beyond the job's TTL and never used for training.</p>
+    </div>
+  </section>
+
+  <!-- LIVE DEMO — Matrix terminal -->
+  <section id="demo" class="section" aria-labelledby="demo-title">
+    <div class="wrap">
+      <header class="section-head reveal">
+        <p class="kicker">Live demo</p>
+        <h2 id="demo-title">Scan code right now</h2>
+        <p class="section-sub">This calls the real API — no key required. Load the planted-vulnerability sample, hit run, and watch the harness catch it live in the terminal.</p>
+      </header>
+
+      <div class="demo reveal">
+        <!-- Controls -->
+        <form class="demo-controls" id="scan-form" autocomplete="off">
+          <div class="field">
+            <label for="language">Language</label>
+            <select id="language" name="language">
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="java">Java</option>
+              <option value="go">Go</option>
+            </select>
+          </div>
+          <div class="field-actions">
+            <button type="button" class="btn btn-ghost" id="load-sample">Load sample</button>
+            <button type="submit" class="btn btn-primary" id="scan">Run scan</button>
+          </div>
+        </form>
+
+        <div class="field code-field">
+          <label for="code">Source code</label>
+          <textarea id="code" name="code" rows="14" spellcheck="false" placeholder="Paste source here, or load the sample above…"></textarea>
+        </div>
+
+        <!-- Advanced: optional BYO key -->
+        <details class="advanced" id="advanced">
+          <summary>Use your own Anthropic API key <span class="advanced-hint">(optional)</span></summary>
+          <div class="advanced-body">
+            <div class="field field-grow">
+              <label for="apiKey">Anthropic API key</label>
+              <input type="password" id="apiKey" name="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+              <p class="privacy-note">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-4z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                Optional. If provided, your key is envelope-encrypted, used only for this scan, then shredded. Your code is never stored beyond the job or used for training.
+              </p>
+            </div>
+          </div>
+        </details>
+
+        <!-- Matrix terminal -->
+        <div class="terminal" id="terminal">
+          <canvas class="rain" id="rain" aria-hidden="true"></canvas>
+          <div class="terminal-chrome">
+            <span class="tl-dots" aria-hidden="true"><i class="dot dot-r"></i><i class="dot dot-y"></i><i class="dot dot-g"></i></span>
+            <span class="terminal-title">aiharness@cf:~$</span>
+          </div>
+          <div class="terminal-body" id="term-body" role="log" aria-live="polite" aria-label="Scan output">
+            <div class="term-lines" id="term-lines"></div>
+            <span class="term-cursor" id="term-cursor" aria-hidden="true"></span>
+          </div>
+        </div>
+
+        <!-- SARIF download (revealed on completion) -->
+        <div class="findings-head" id="findings-head" hidden>
+          <h3 id="findings-count">Findings</h3>
+          <a class="btn btn-small" id="sarif" href="#" download hidden>Download SARIF</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STANDARDS -->
+  <section id="standards" class="section section-alt" aria-labelledby="std-title">
+    <div class="wrap">
+      <header class="section-head reveal">
+        <p class="kicker">Standards &amp; best practices</p>
+        <h2 id="std-title">Mapped to the frameworks your auditors already use</h2>
+        <p class="section-sub">Every reference links to its authoritative source. We align on technical merit.</p>
+      </header>
+      <div class="std-grid">
+        <article class="std-card reveal">
+          <h3>Weakness taxonomy</h3>
+          <ul>
+            <li><a href="https://cwe.mitre.org/" target="_blank" rel="noopener noreferrer">CWE</a></li>
+            <li><a href="https://cwe.mitre.org/top25/archive/2024/2024_cwe_top25.html" target="_blank" rel="noopener noreferrer">CWE Top 25 (2024)</a></li>
+            <li><a href="https://attack.mitre.org/" target="_blank" rel="noopener noreferrer">MITRE ATT&amp;CK</a></li>
+            <li><a href="https://capec.mitre.org/" target="_blank" rel="noopener noreferrer">CAPEC</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Application risk</h3>
+          <ul>
+            <li><a href="https://owasp.org/Top10/" target="_blank" rel="noopener noreferrer">OWASP Top 10 (2021)</a></li>
+            <li><a href="https://owasp.org/www-project-application-security-verification-standard/" target="_blank" rel="noopener noreferrer">OWASP ASVS 5.0</a></li>
+            <li><a href="https://genai.owasp.org/llm-top-10/" target="_blank" rel="noopener noreferrer">OWASP Top 10 for LLM Apps (2025)</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Findings format</h3>
+          <ul>
+            <li><a href="https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html" target="_blank" rel="noopener noreferrer">SARIF 2.1.0 (OASIS)</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Secure SDLC</h3>
+          <ul>
+            <li><a href="https://csrc.nist.gov/pubs/sp/800/218/final" target="_blank" rel="noopener noreferrer">NIST SSDF SP 800-218</a></li>
+            <li><a href="https://csrc.nist.gov/pubs/sp/800/218/a/final" target="_blank" rel="noopener noreferrer">SP 800-218A (AI companion)</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>AI governance</h3>
+          <ul>
+            <li><a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF (AI 100-1)</a></li>
+            <li><a href="https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence" target="_blank" rel="noopener noreferrer">Gen-AI Profile (NIST AI 600-1)</a></li>
+            <li><a href="https://www.iso.org/standard/42001" target="_blank" rel="noopener noreferrer">ISO/IEC 42001:2023</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Supply chain</h3>
+          <ul>
+            <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA v1.0</a></li>
+            <li><a href="https://cyclonedx.org/" target="_blank" rel="noopener noreferrer">CycloneDX SBOM</a></li>
+            <li><a href="https://www.cisa.gov/sbom" target="_blank" rel="noopener noreferrer">CISA SBOM</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Organizational security</h3>
+          <ul>
+            <li><a href="https://www.iso.org/standard/27001" target="_blank" rel="noopener noreferrer">ISO/IEC 27001</a></li>
+            <li><a href="https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2" target="_blank" rel="noopener noreferrer">SOC 2</a></li>
+            <li><a href="https://www.nist.gov/cyberframework" target="_blank" rel="noopener noreferrer">NIST CSF 2.0</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Critical infrastructure / OT</h3>
+          <ul>
+            <li><a href="https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards" target="_blank" rel="noopener noreferrer">ISA/IEC 62443 series</a></li>
+          </ul>
+        </article>
+        <article class="std-card reveal">
+          <h3>Code quality</h3>
+          <ul>
+            <li><a href="https://www.iso.org/standard/80623.html" target="_blank" rel="noopener noreferrer">ISO/IEC 5055</a></li>
+          </ul>
+        </article>
+      </div>
+      <p class="std-footnote reveal">Executive Order 14110 was revoked in Jan 2025 — we align to SSDF / AI-RMF on technical merit, not the executive order.</p>
+    </div>
+  </section>
+
+  <!-- USE CASES -->
+  <section id="use-cases" class="section" aria-labelledby="uc-title">
+    <div class="wrap">
+      <header class="section-head reveal">
+        <p class="kicker">Use cases</p>
+        <h2 id="uc-title">Where teams deploy AIHarness</h2>
+      </header>
+      <div class="uc-grid">
+        <article class="uc-card reveal">
+          <h3>CI / PR gate</h3>
+          <p>Block merges over a severity threshold and post SARIF straight to the pull request. Deterministic rule IDs keep the gate stable across runs.</p>
+        </article>
+        <article class="uc-card reveal">
+          <h3>Pre-acquisition code audit</h3>
+          <p>Scan a target's codebase before you sign. Get a defensible, standards-mapped findings report with an immutable audit trail.</p>
+        </article>
+        <article class="uc-card reveal">
+          <h3>OT / ICS repo review</h3>
+          <p>Review operational-technology repositories with findings mapped to <strong>ISA/IEC 62443</strong> — built for critical-infrastructure scrutiny.</p>
+        </article>
+        <article class="uc-card reveal">
+          <h3>Second opinion over existing SAST</h3>
+          <p>Layer AIHarness over your current scanner to dedupe noise, explain findings in plain language, and surface evidence-graded confidence.</p>
+        </article>
+        <article class="uc-card reveal">
+          <h3>SBOM &amp; supply-chain check</h3>
+          <p>Generate a CycloneDX SBOM and check dependencies, aligning with SLSA and CISA guidance on software supply-chain integrity.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST -->
+  <section id="trust" class="section section-alt" aria-labelledby="trust-title">
+    <div class="wrap">
+      <header class="section-head reveal">
+        <p class="kicker">Trust &amp; data governance</p>
+        <h2 id="trust-title">Built so an auditor can trust it</h2>
+      </header>
+      <div class="trust-grid">
+        <article class="trust-card reveal"><h3>BYO key, shredded</h3><p>Your Anthropic key is envelope-encrypted, used only for the job, then shredded. We never persist it.</p></article>
+        <article class="trust-card reveal"><h3>Source kept only for the job</h3><p>Code is retained only for the job's TTL, never used for training, then discarded.</p></article>
+        <article class="trust-card reveal"><h3>Prompt-injection defense</h3><p>Code is passed as data; the model fills a strict JSON schema and cannot be steered by content inside the scanned source.</p></article>
+        <article class="trust-card reveal"><h3>Reproducible &amp; audited</h3><p>An immutable audit log records model id, version, prompt hash, and ruleset versions for every scan.</p></article>
+        <article class="trust-card reveal"><h3>Model-agnostic by interface</h3><p>A clean adapter abstracts Claude, OpenAI, and Gemini. Swap providers without changing the pipeline.</p></article>
+        <article class="trust-card reveal"><h3>Honest accuracy posture</h3><p>Evidence-based confidence. LLM-only findings are labeled &ldquo;needs review,&rdquo; never overclaimed as confirmed.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- SELF SCAN -->
+  <section id="self-scan" class="section" aria-labelledby="self-title">
+    <div class="wrap">
+      <header class="section-head reveal">
+        <p class="kicker">We scan ourselves</p>
+        <h2 id="self-title">Our own self-scan, dated 2026-06-24</h2>
+        <p class="section-sub">If we ask you to trust the harness, we run it on ourselves — and report it honestly.</p>
+      </header>
+      <div class="self-grid">
+        <div class="self-stat reveal"><span class="self-num">0</span><span class="self-label">production-dependency vulnerabilities</span></div>
+        <div class="self-stat reveal"><span class="self-num">148</span><span class="self-label">components in our CycloneDX SBOM</span></div>
+        <div class="self-stat reveal"><span class="self-num">2.1.0</span><span class="self-label">SARIF output, schema-validated in CI</span></div>
+      </div>
+      <ul class="self-list reveal">
+        <li>Manual review clean: BYO-key lifecycle, container path-traversal guard, parameterized SQL, XSS-safe DOM.</li>
+        <li>Our SARIF output is validated against the official SARIF 2.1.0 JSON schema in CI.</li>
+        <li>A CycloneDX SBOM (148 components) is generated as part of the build.</li>
+        <li>LLM-only findings are labeled &ldquo;needs review&rdquo; — we don't overclaim.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <div class="footer-lead">
+      <p class="footer-answer">Yes — a model-agnostic AI harness for scanning code for vulnerabilities.</p>
+      <a class="btn btn-primary" href="#demo">Run a live scan</a>
+    </div>
+    <p class="footer-meta">Built on Cloudflare Workers · Durable Objects · Containers</p>
+  </div>
+</footer>
+
+<script src="/architecture.js" defer></script>
+<script src="/app.js" defer></script>
+</body>
+</html>

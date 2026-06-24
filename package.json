@@ -9,7 +9,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate:local": "wrangler d1 migrations apply aiharness --local",
-    "migrate:remote": "wrangler d1 migrations apply aiharness --remote"
+    "migrate:remote": "wrangler d1 migrations apply aiharness --remote",
+    "typecheck": "tsc --noEmit",
+    "sbom": "cyclonedx-npm --output-format JSON --output-file sbom.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

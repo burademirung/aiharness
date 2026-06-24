@@ -12,7 +12,7 @@ Live: https://aiharness.degenito.ai
 
 ```sh
 npm install
-npm test                 # vitest workspace — 62 tests (workerd pool + Node pool)
+npm test                 # vitest workspace — 67 tests (workerd pool + Node pool)
 npx tsc --noEmit         # type-check src (currently clean)
 npm run dev              # wrangler dev (local)
 npm run deploy           # wrangler deploy — REQUIRES Docker daemon running (builds Semgrep image)

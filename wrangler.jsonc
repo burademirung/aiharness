@@ -17,7 +17,7 @@
     { "binding": "SOURCE", "bucket_name": "aiharness-source" }
   ],
   "kv_namespaces": [
-    { "binding": "RATE_LIMIT", "id": "PLACEHOLDER_KV_ID" }
+    { "binding": "RATE_LIMIT", "id": "134ad015f71b45738adcc5f7ebe9546b" }
   ],
   "queues": {
     "producers": [{ "binding": "SCAN_QUEUE", "queue": "aiharness-scans" }],

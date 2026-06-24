@@ -10,7 +10,7 @@
 [![SARIF 2.1.0](https://img.shields.io/badge/SARIF-2.1.0-6f42c1?style=flat-square)](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/tests-62%20passing-22c55e?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-67%20passing-22c55e?style=flat-square)](#testing)
 
 ---
 
@@ -77,7 +77,7 @@ See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the deep dive (component-by-com
 
 ```bash
 npm install
-npm test        # 62 tests (vitest workspace)
+npm test        # 67 tests (vitest workspace)
 npm run dev     # wrangler dev
 ```
 
@@ -220,7 +220,7 @@ See **[SECURITY.md](./SECURITY.md)** for the full posture.
 ## Testing
 
 ```bash
-npm test            # 62 tests (full vitest suite)
+npm test            # 67 tests (full vitest suite)
 npx tsc --noEmit    # type-check (src is clean)
 ```
 

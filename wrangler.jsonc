@@ -16,6 +16,9 @@
   "r2_buckets": [
     { "binding": "SOURCE", "bucket_name": "aiharness-source" }
   ],
+  "kv_namespaces": [
+    { "binding": "RATE_LIMIT", "id": "PLACEHOLDER_KV_ID" }
+  ],
   "queues": {
     "producers": [{ "binding": "SCAN_QUEUE", "queue": "aiharness-scans" }],
     // max_retries: 0 — fail-fast by design.  The BYO API key is shredded

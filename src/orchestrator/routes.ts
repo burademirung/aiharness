@@ -2,10 +2,11 @@ import { Hono } from "hono";
 import type { Env } from "../index";
 import { validateScanRequest } from "./validate";
 import { encryptKey } from "../crypto/envelope";
-import { createScan, getScan, getFindings, storeJobKey } from "../db/queries";
+import { createScan, getScan, getFindings, storeJobKey, deleteJobKey } from "../db/queries";
 import { CLAUDE_MODEL } from "../adapters/claude";
 import { fetchRepoFiles } from "../input-adapters/git-url";
 import { webhook } from "./webhook";
+import { checkRateLimit } from "./ratelimit";
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -16,6 +17,11 @@ api.post("/scans", async (c) => {
   const body = await c.req.json().catch(() => null);
   const v = validateScanRequest(body);
   if (!v.ok) return c.json({ error: v.message }, v.status as 400 | 413);
+
+  // Demo rate limit (no-op when RATE_LIMIT KV is unbound, e.g. tests/local).
+  const ip = c.req.header("cf-connecting-ip") ?? "";
+  const rl = await checkRateLimit(c.env.RATE_LIMIT, ip);
+  if (!rl.allowed) return c.json({ error: "rate limit exceeded — try again later" }, 429);
 
   // BYO key if provided; otherwise fall back to the server's demo key so visitors
   // can try the live scan without bringing their own key.
@@ -47,7 +53,14 @@ api.post("/scans", async (c) => {
   });
   const envelope = await encryptKey(c.env.KEK, apiKey);
   await storeJobKey(c.env.DB, id, envelope);
-  await c.env.SCAN_QUEUE.send({ scanId: id });
+  // If enqueue fails AFTER the job key was stored, the ciphertext would be orphaned
+  // (no worker will ever shred it). Delete it and surface a clear 500.
+  try {
+    await c.env.SCAN_QUEUE.send({ scanId: id });
+  } catch {
+    await deleteJobKey(c.env.DB, id).catch(() => {});
+    return c.json({ error: "failed to enqueue scan" }, 500);
+  }
   return c.json({ id }, 202);
 });
 
@@ -63,9 +76,4 @@ api.get("/scans/:id/sarif", async (c) => {
   const obj = await c.env.SOURCE.get(`sarif/${id}.json`);
   if (!obj) return c.json({ error: "not ready" }, 404);
   return new Response(obj.body, { headers: { "content-type": "application/json", "content-disposition": `attachment; filename="${id}.sarif"` } });
-});
-
-api.get("/scans/:id/stream", async (c) => {
-  const stub = c.env.SCAN_RUNNER.get(c.env.SCAN_RUNNER.idFromName(c.req.param("id")));
-  return stub.fetch(new Request("http://do/stream"));
 });

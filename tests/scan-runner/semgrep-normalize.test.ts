@@ -18,4 +18,29 @@ describe("normalizeSemgrep", () => {
   it("returns [] for empty results", () => {
     expect(normalizeSemgrep({ results: [], errors: [] })).toEqual([]);
   });
+
+  it("clamps a missing/zero line to startLine 1 (SARIF region minimum is 1)", () => {
+    const findings = normalizeSemgrep({
+      results: [
+        {
+          check_id: "rule.with.no.line",
+          path: "app.py",
+          // no start/end → lines default to 0, which is SARIF-invalid
+          extra: { severity: "ERROR", message: "no location" },
+        },
+        {
+          check_id: "rule.with.zero.line",
+          path: "app.py",
+          start: { line: 0 },
+          end: { line: 0 },
+          extra: { severity: "WARNING", message: "explicit zero" },
+        },
+      ],
+    });
+    expect(findings).toHaveLength(2);
+    expect(findings[0]!.startLine).toBe(1);
+    expect(findings[0]!.endLine).toBe(1);
+    expect(findings[1]!.startLine).toBe(1);
+    expect(findings[1]!.endLine).toBe(1);
+  });
 });

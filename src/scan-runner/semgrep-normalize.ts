@@ -26,8 +26,10 @@ export function normalizeSemgrep(json: unknown): Finding[] {
     severity: mapSeverity(String(r.extra?.severity ?? "INFO")),
     message: String(r.extra?.message ?? ""),
     file: String(r.path ?? ""),
-    startLine: Number(r.start?.line ?? 0),
-    endLine: Number(r.end?.line ?? r.start?.line ?? 0),
+    // SARIF region.startLine/endLine have a schema minimum of 1; clamp so a result
+    // with a missing/zero line never produces a schema-INVALID SARIF document.
+    startLine: Math.max(1, Number(r.start?.line ?? 0)),
+    endLine: Math.max(1, Number(r.end?.line ?? r.start?.line ?? 0)),
     snippet: String(r.extra?.lines ?? ""),
   }));
 }

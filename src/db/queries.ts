@@ -32,14 +32,16 @@ export async function setScanSarifKey(db: D1Database, id: string, sarifKey: stri
 }
 
 export async function insertFindings(db: D1Database, scanId: string, findings: Finding[]): Promise<void> {
-  for (const f of findings) {
-    await db
-      .prepare(
-        "INSERT INTO findings (id, scan_id, rule_id, cwe, severity, confidence, evidence, verdict, message, file, start_line, end_line, snippet, explanation, remediation) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      )
-      .bind(f.id, scanId, f.ruleId, f.cwe, f.severity, f.confidence ?? null, f.evidence ?? null, f.verdict ?? null, f.message, f.file, f.startLine, f.endLine, f.snippet, f.explanation ?? null, f.remediation ?? null)
-      .run();
-  }
+  if (findings.length === 0) return;
+  // Insert all findings atomically: db.batch runs the statements in a single
+  // implicit transaction, so a failure rolls back the whole set (no partial writes).
+  const stmt = db.prepare(
+    "INSERT INTO findings (id, scan_id, rule_id, cwe, severity, confidence, evidence, verdict, message, file, start_line, end_line, snippet, explanation, remediation) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+  );
+  const statements = findings.map((f) =>
+    stmt.bind(f.id, scanId, f.ruleId, f.cwe, f.severity, f.confidence ?? null, f.evidence ?? null, f.verdict ?? null, f.message, f.file, f.startLine, f.endLine, f.snippet, f.explanation ?? null, f.remediation ?? null)
+  );
+  await db.batch(statements);
 }
 
 export async function getFindings(db: D1Database, scanId: string): Promise<Finding[]> {

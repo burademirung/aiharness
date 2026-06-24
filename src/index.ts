@@ -19,6 +19,9 @@ export interface Env {
   // GITHUB_TOKEN authenticates outbound GitHub API calls (file fetch + comment).
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_TOKEN?: string;
+  // Optional KV namespace backing the demo rate limiter on POST /api/scans.
+  // When unset (tests/local), rate limiting is skipped (no-op, allow all).
+  RATE_LIMIT?: KVNamespace;
 }
 
 const app = new Hono<{ Bindings: Env }>();

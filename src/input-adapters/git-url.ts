@@ -26,6 +26,56 @@ const SKIP_DIRS = new Set(["node_modules", "vendor", "dist", "build", ".git"]);
 const MAX_FILES = 50;
 const MAX_TOTAL_BYTES = 256 * 1024;
 const MAX_BLOB_BYTES = 64 * 1024;
+const FETCH_TIMEOUT_MS = 10_000;
+
+// SSRF defence: we ONLY ever fetch from these two GitHub hosts. URLs are
+// constructed from the parsed owner/repo/ref (never an arbitrary user host),
+// and every constructed URL's hostname is asserted against this set before fetch.
+const ALLOWED_HOSTS = new Set(["api.github.com", "raw.githubusercontent.com"]);
+
+/**
+ * Assert a constructed URL targets an allowlisted GitHub host, then return
+ * RequestInit hardened against SSRF: a 10s timeout and `redirect: "error"` so a
+ * malicious redirect cannot bounce the request to another host.
+ */
+function safeInit(url: string, extra: RequestInit = {}): RequestInit {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    throw new Error(`refusing to fetch malformed URL: ${url}`);
+  }
+  if (!ALLOWED_HOSTS.has(host)) {
+    throw new Error(`refusing to fetch non-allowlisted host: ${host}`);
+  }
+  return {
+    ...extra,
+    redirect: "error",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  } as RequestInit;
+}
+
+/**
+ * Detect a GitHub REST rate-limit 403 and throw a clear, actionable error.
+ * GitHub signals rate limiting via a 403 with `x-ratelimit-remaining: 0` and/or a
+ * body message mentioning "rate limit".
+ */
+async function assertNotRateLimited(res: Response): Promise<void> {
+  if (res.status !== 403) return;
+  const remaining = res.headers.get("x-ratelimit-remaining");
+  let bodyMentionsRateLimit = false;
+  try {
+    const text = await res.clone().text();
+    bodyMentionsRateLimit = /rate limit/i.test(text);
+  } catch {
+    // ignore body read failures
+  }
+  if (remaining === "0" || bodyMentionsRateLimit) {
+    throw new Error(
+      "GitHub API rate limit exceeded — try again later, use a smaller repo, or self-host"
+    );
+  }
+}
 
 export interface ParsedGitHubUrl {
   owner: string;
@@ -59,6 +109,7 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
 
   const owner = segments[0];
   let repo = segments[1];
+  if (!owner || !repo) return null;
 
   // Strip .git suffix
   if (repo.endsWith(".git")) repo = repo.slice(0, -4);
@@ -100,10 +151,12 @@ export async function fetchRepoFiles(
 
   // Step (a): resolve default branch if ref not given in URL
   if (!ref) {
-    const repoRes = await fetchImpl(`https://api.github.com/repos/${owner}/${repo}`, {
+    const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
+    const repoRes = await fetchImpl(repoUrl, safeInit(repoUrl, {
       headers: { "user-agent": "aiharness" },
-    } as RequestInit);
+    }));
     if (!repoRes.ok) {
+      await assertNotRateLimited(repoRes);
       throw new Error(
         `GitHub API error fetching repo ${owner}/${repo}: ${repoRes.status}`
       );
@@ -113,11 +166,12 @@ export async function fetchRepoFiles(
   }
 
   // Step (b): get the tree recursively
-  const treeRes = await fetchImpl(
-    `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`,
-    { headers: { "user-agent": "aiharness" } } as RequestInit
-  );
+  const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
+  const treeRes = await fetchImpl(treeUrl, safeInit(treeUrl, {
+    headers: { "user-agent": "aiharness" },
+  }));
   if (!treeRes.ok) {
+    await assertNotRateLimited(treeRes);
     throw new Error(
       `GitHub API error fetching tree for ${owner}/${repo}@${ref}: ${treeRes.status}`
     );
@@ -157,10 +211,13 @@ export async function fetchRepoFiles(
     if (files.length >= MAX_FILES) break;
 
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${entry.path}`;
-    const rawRes = await fetchImpl(rawUrl, {
+    const rawRes = await fetchImpl(rawUrl, safeInit(rawUrl, {
       headers: { "user-agent": "aiharness" },
-    } as RequestInit);
-    if (!rawRes.ok) continue; // skip files that can't be fetched
+    }));
+    if (!rawRes.ok) {
+      await assertNotRateLimited(rawRes);
+      continue; // skip files that can't be fetched
+    }
 
     const content = await rawRes.text();
     const byteLen = new TextEncoder().encode(content).length;
@@ -181,7 +238,7 @@ export async function fetchRepoFiles(
   for (const f of files) {
     extCount[f.ext] = (extCount[f.ext] ?? 0) + 1;
   }
-  const dominantExt = Object.entries(extCount).sort((a, b) => b[1] - a[1])[0][0];
+  const dominantExt = Object.entries(extCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
   const language = EXT_TO_LANG[dominantExt] ?? "python";
 
   return {

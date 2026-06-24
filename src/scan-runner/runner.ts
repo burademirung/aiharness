@@ -77,15 +77,21 @@ export class ScanRunner extends DurableObject<Env> {
     const { SYSTEM_PROMPT } = await import("../adapters/model-adapter");
 
     const env = this.env;
-    // Load + idempotency guard BEFORE the try/finally: a retry of an already-finished
-    // scan must be a true no-op and must NOT run the finally cleanup (which would flip a
-    // completed scan to "failed" and re-delete its source).
-    const scan = await getScan(env.DB, scanId);
-    if (!scan) return;                                   // unknown scan — nothing to do
-    if (scan.status === "completed" || scan.status === "failed") return;
-
+    // `processed` flips to true only once we commit to processing this scan (i.e. the
+    // idempotency guard passed). It gates the status/source cleanup in `finally` so an
+    // idempotent no-op retry of an already-finished scan does NOT flip its status or
+    // re-delete its source. The job-key shred, however, ALWAYS runs (it is idempotent).
+    let processed = false;
     let succeeded = false;
     try {
+      // Load + idempotency guard INSIDE the try so that if getScan throws, the finally
+      // still runs and shreds the key. A retry of an already-finished scan must be a
+      // true no-op (processed stays false → no status flip, no source re-delete).
+      const scan = await getScan(env.DB, scanId);
+      if (!scan) return;                                 // unknown scan — nothing to do
+      if (scan.status === "completed" || scan.status === "failed") return;
+      processed = true;                                  // committed to processing
+
       await setScanStatus(env.DB, scanId, "scanning");
 
       // Fix 2: guard missing R2 object before parsing
@@ -151,10 +157,15 @@ export class ScanRunner extends DurableObject<Env> {
       // cleanup always runs and callers (queue handler) see a resolved promise.
       console.error("runScan error for", scanId, err);
     } finally {
-      await deleteJobKey(env.DB, scanId);                 // always shred the key first
-      // Fix 1: set "failed" when an error occurred, "completed" on success
-      await setScanStatus(env.DB, scanId, succeeded ? "completed" : "failed");
-      await env.SOURCE.delete(`source/${scanId}.json`).catch(() => {});  // TTL: drop source
+      // ALWAYS shred the key — idempotent (safe on a no-op retry where the key is
+      // already gone). This runs even if getScan threw before `processed` was set.
+      await deleteJobKey(env.DB, scanId).catch(() => {});
+      // Status flip + source delete only when we actually committed to processing,
+      // so an idempotent no-op retry does NOT flip a completed scan's status.
+      if (processed) {
+        await setScanStatus(env.DB, scanId, succeeded ? "completed" : "failed");
+        await env.SOURCE.delete(`source/${scanId}.json`).catch(() => {});  // TTL: drop source
+      }
     }
   }
 }

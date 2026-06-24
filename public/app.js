@@ -28,6 +28,34 @@
   var keyInput    = $("apiKey");        // inside the optional <details>
   var codeArea    = $("code");
 
+  /* ---------- input mode: "Paste code" vs "GitHub repo URL" ---------- */
+  var modePasteBtn = $("mode-paste");
+  var modeRepoBtn  = $("mode-repo");
+  var panelPaste   = $("panel-paste");
+  var panelRepo    = $("panel-repo");
+  var repoUrlInput = $("repo-url");
+
+  var inputMode = "paste"; // "paste" | "repo"
+
+  function setMode(mode) {
+    inputMode = mode;
+    var isPaste = mode === "paste";
+    if (modePasteBtn) {
+      modePasteBtn.classList.toggle("mode-btn-active", isPaste);
+      modePasteBtn.setAttribute("aria-pressed", isPaste ? "true" : "false");
+    }
+    if (modeRepoBtn) {
+      modeRepoBtn.classList.toggle("mode-btn-active", !isPaste);
+      modeRepoBtn.setAttribute("aria-pressed", isPaste ? "false" : "true");
+    }
+    if (panelPaste) panelPaste.hidden = !isPaste;
+    if (panelRepo)  panelRepo.hidden  = isPaste;
+    if (loadBtn)    loadBtn.hidden    = !isPaste;
+  }
+
+  if (modePasteBtn) modePasteBtn.addEventListener("click", function () { setMode("paste"); });
+  if (modeRepoBtn)  modeRepoBtn.addEventListener("click", function () { setMode("repo"); });
+
   var termBody    = $("term-body");
   var termLines   = $("term-lines");
   var termCursor  = $("term-cursor");
@@ -318,34 +346,45 @@
   }
 
   function startScan() {
-    var code = codeArea ? codeArea.value.trim() : "";
-
     clearTerm();
     if (findingsHead) findingsHead.hidden = true;
     if (sarifLink) sarifLink.hidden = true;
 
-    if (!code) {
-      line("t-err", "$ error: add some source code to scan (or click \"Load sample\").");
-      return;
+    var lang = langSel ? langSel.value : "python";
+    var userKey = keyInput && keyInput.value ? keyInput.value.trim() : "";
+    var body, cmdLabel;
+
+    if (inputMode === "repo") {
+      // GitHub repo URL mode
+      var repoUrl = repoUrlInput ? repoUrlInput.value.trim() : "";
+      if (!repoUrl) {
+        line("t-err", "$ error: enter a GitHub repository URL (e.g. https://github.com/owner/repo).");
+        return;
+      }
+      body = { language: lang, repoUrl: repoUrl };
+      if (userKey) body.apiKey = userKey;
+      cmdLabel = "aiharness scan --repo " + repoUrl;
+    } else {
+      // Paste code mode (existing behaviour)
+      var code = codeArea ? codeArea.value.trim() : "";
+      if (!code) {
+        line("t-err", "$ error: add some source code to scan (or click \"Load sample\").");
+        return;
+      }
+      var ext = { python: "py", javascript: "js", java: "java", go: "go" }[lang] || "txt";
+      var fileName = "app." + ext;
+      body = { language: lang, files: [{ path: fileName, content: code }] };
+      if (userKey) body.apiKey = userKey;
+      cmdLabel = "aiharness scan " + fileName;
     }
 
     setBusy(true);
     polling = true;
 
-    var lang = langSel ? langSel.value : "python";
-    var ext = { python: "py", javascript: "js", java: "java", go: "go" }[lang] || "txt";
-    var fileName = "app." + ext;
-
     // Build request body. apiKey OMITTED by default; only include it if the
     // user opened the advanced disclosure and typed a non-empty key.
-    var body = {
-      language: lang,
-      files: [{ path: fileName, content: code }]
-    };
-    var userKey = keyInput && keyInput.value ? keyInput.value.trim() : "";
-    if (userKey) body.apiKey = userKey;
 
-    typeCommand("aiharness scan " + fileName, function () {
+    typeCommand(cmdLabel, function () {
       if (userKey) line("t-dim", "> using your Anthropic key (envelope-encrypted · shredded after scan)");
       else         line("t-dim", "> using configured demo key (no key required)");
 

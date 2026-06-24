@@ -33,4 +33,28 @@ describe("validateScanRequest", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.status).toBe(400);
   });
+
+  // repoUrl support
+  it("accepts a request with only repoUrl (no files)", () => {
+    const r = validateScanRequest({ language: "python", repoUrl: "https://github.com/owner/repo" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a request with neither files nor repoUrl", () => {
+    const r = validateScanRequest({ language: "python" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+      expect(r.message).toMatch(/provide files or a repoUrl/i);
+    }
+  });
+
+  it("accepts a request with both files and repoUrl (files take precedence)", () => {
+    const r = validateScanRequest({
+      language: "python",
+      files: [file("print(1)")],
+      repoUrl: "https://github.com/owner/repo",
+    });
+    expect(r.ok).toBe(true);
+  });
 });

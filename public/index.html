@@ -127,6 +127,12 @@
       </header>
 
       <div class="demo reveal">
+        <!-- Input mode: segmented control -->
+        <div class="input-mode" role="group" aria-label="Input mode">
+          <button type="button" class="mode-btn mode-btn-active" id="mode-paste" aria-pressed="true">Paste code</button>
+          <button type="button" class="mode-btn" id="mode-repo" aria-pressed="false">GitHub repo URL</button>
+        </div>
+
         <!-- Controls -->
         <form class="demo-controls" id="scan-form" autocomplete="off">
           <div class="field">
@@ -144,9 +150,17 @@
           </div>
         </form>
 
-        <div class="field code-field">
+        <!-- Paste-code panel -->
+        <div id="panel-paste" class="field code-field">
           <label for="code">Source code</label>
           <textarea id="code" name="code" rows="14" spellcheck="false" placeholder="Paste source here, or load the sample above…"></textarea>
+        </div>
+
+        <!-- GitHub repo URL panel -->
+        <div id="panel-repo" class="field" hidden>
+          <label for="repo-url">GitHub repository URL</label>
+          <input type="url" id="repo-url" name="repoUrl" placeholder="https://github.com/owner/repo" spellcheck="false" autocomplete="off" />
+          <p class="privacy-note" style="margin-top:.4rem">Public repos only. The worker fetches source files via the GitHub REST API (no token) and feeds them into the same pipeline.</p>
         </div>
 
         <!-- Advanced: optional BYO key -->

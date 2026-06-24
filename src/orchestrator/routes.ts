@@ -4,6 +4,7 @@ import { validateScanRequest } from "./validate";
 import { encryptKey } from "../crypto/envelope";
 import { createScan, getScan, getFindings, storeJobKey } from "../db/queries";
 import { CLAUDE_MODEL } from "../adapters/claude";
+import { fetchRepoFiles } from "../input-adapters/git-url";
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -17,11 +18,27 @@ api.post("/scans", async (c) => {
   const apiKey = (v.value.apiKey && v.value.apiKey.trim()) || c.env.DEMO_ANTHROPIC_KEY;
   if (!apiKey) return c.json({ error: "no API key provided and no demo key configured" }, 400);
 
+  // Resolve language + files: either from the request body or by fetching a GitHub repo.
+  let language = v.value.language;
+  let files = v.value.files;
+
+  const hasFiles = Array.isArray(files) && files.length > 0;
+  if (!hasFiles && v.value.repoUrl) {
+    try {
+      const fetched = await fetchRepoFiles(v.value.repoUrl);
+      language = fetched.language;
+      files = fetched.files;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "failed to fetch repository";
+      return c.json({ error: msg }, 400);
+    }
+  }
+
   const id = crypto.randomUUID();
   const sourceKey = `source/${id}.json`;
-  await c.env.SOURCE.put(sourceKey, JSON.stringify({ language: v.value.language, files: v.value.files }));
+  await c.env.SOURCE.put(sourceKey, JSON.stringify({ language, files }));
   await createScan(c.env.DB, {
-    id, language: v.value.language, status: "queued", sourceKey,
+    id, language, status: "queued", sourceKey,
     modelId: "claude", modelVersion: CLAUDE_MODEL,
   });
   const envelope = await encryptKey(c.env.KEK, apiKey);

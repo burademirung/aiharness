@@ -550,6 +550,21 @@ a:hover { text-decoration: underline; }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
   padding: 1.75rem; display: grid; gap: 1.4rem; box-shadow: var(--shadow);
 }
+/* Input-mode segmented control */
+.input-mode {
+  display: inline-flex; border: 1px solid var(--line-2); border-radius: calc(var(--r) - 2px);
+  overflow: hidden; background: var(--bg);
+}
+.mode-btn {
+  font-family: var(--mono); font-size: .8rem; font-weight: 500; letter-spacing: .03em;
+  padding: .38rem 1rem; background: transparent; border: none; color: var(--ink-dim);
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.mode-btn + .mode-btn { border-left: 1px solid var(--line-2); }
+.mode-btn:hover { background: var(--tint); color: var(--ink); }
+.mode-btn-active { background: var(--signal) !important; color: #fff !important; }
+.mode-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+
 .demo-controls { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: flex-end; justify-content: space-between; }
 .field { display: flex; flex-direction: column; gap: .45rem; }
 .demo-controls .field { min-width: 180px; }

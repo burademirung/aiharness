@@ -19,12 +19,23 @@ export async function getScan(db: D1Database, id: string): Promise<ScanJob | nul
     sourceKey: row.source_key as string,
     modelId: row.model_id as string,
     modelVersion: row.model_version as string,
+    error: (row.error as string | null) ?? null,
   };
 }
 
-export async function setScanStatus(db: D1Database, id: string, status: ScanStatus): Promise<void> {
+export async function setScanStatus(
+  db: D1Database,
+  id: string,
+  status: ScanStatus,
+  error?: string | null,
+): Promise<void> {
   const completedAt = status === "completed" || status === "failed" ? Date.now() : null;
-  await db.prepare("UPDATE scans SET status = ?, completed_at = ? WHERE id = ?").bind(status, completedAt, id).run();
+  // Persist a short failure reason on "failed"; clear it on any other transition.
+  const errVal = status === "failed" ? (error ?? null) : null;
+  await db
+    .prepare("UPDATE scans SET status = ?, completed_at = ?, error = ? WHERE id = ?")
+    .bind(status, completedAt, errVal, id)
+    .run();
 }
 
 export async function setScanSarifKey(db: D1Database, id: string, sarifKey: string): Promise<void> {

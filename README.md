@@ -10,7 +10,7 @@
 [![SARIF 2.1.0](https://img.shields.io/badge/SARIF-2.1.0-6f42c1?style=flat-square)](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/tests-67%20passing-22c55e?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-69%20passing-22c55e?style=flat-square)](#testing)
 
 ---
 
@@ -77,23 +77,30 @@ See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the deep dive (component-by-com
 
 ```bash
 npm install
-npm test        # 67 tests (vitest workspace)
+npm test        # 69 tests (vitest workspace)
 npm run dev     # wrangler dev
 ```
 
 ### Deploy
 
 ```bash
-# 1. Provision Cloudflare resources (D1, R2, Queue) and wire them in wrangler.jsonc
-#    - D1 database:  aiharness
-#    - R2 bucket:    aiharness-source
-#    - Queue:        aiharness-scans
+# 1. Provision Cloudflare resources and wire their ids/names into wrangler.jsonc
+#    - D1 database:    aiharness
+#    - R2 bucket:      aiharness-source
+#    - Queue:          aiharness-scans
+#    - KV namespace:   RATE_LIMIT  (demo rate limiter)
+wrangler kv namespace create RATE_LIMIT   # then paste the returned id into
+                                          # wrangler.jsonc → kv_namespaces[].id
 
 # 2. Set secrets
-wrangler secret put KEK                  # envelope key-encryption key
-wrangler secret put DEMO_ANTHROPIC_KEY   # keyless-demo fallback key
+wrangler secret put KEK                  # envelope key-encryption key (REQUIRED)
+wrangler secret put DEMO_ANTHROPIC_KEY   # keyless-demo fallback key (REQUIRED for the demo)
+# Optional — only needed to activate the PR-webhook bot / raise the GitHub fetch rate limit:
+wrangler secret put GITHUB_WEBHOOK_SECRET # verifies inbound PR-webhook HMAC signatures
+wrangler secret put GITHUB_TOKEN          # outbound GitHub API (PR comments; repo fetch 60→5000/h)
 
-# 3. Apply migrations to the remote D1
+# 3. Apply D1 migrations to the remote DB
+#    (0001_init, 0002_pr_jobs, 0003_scan_error)
 npm run migrate:remote
 
 # 4. Deploy  (Docker daemon MUST be running — it builds the Semgrep image)
@@ -101,6 +108,8 @@ npm run deploy
 ```
 
 > **Heads up:** `npm run deploy` fails if Docker is not running, because it builds the `semgrep/semgrep`-based container image. See [ARCHITECTURE.md → Operations](./ARCHITECTURE.md#operations--deploy-gotchas).
+>
+> **Data retention / R2:** scanned **source** is deleted from R2 as soon as the job ends. The **SARIF** report (`sarif/<id>.json`) and the **findings** rows persist (D1 has no TTL) and are reachable only by the scan's unguessable UUIDv4 id. To auto-expire SARIF objects, add an [R2 lifecycle rule](https://developers.cloudflare.com/r2/buckets/object-lifecycles/) on the `sarif/` prefix.
 
 ---
 
@@ -148,9 +157,11 @@ Caps: **max 50 files**, **max 256 KB total** (UTF-8). To bring your own key, inc
 
 ### `GET /api/scans/:id` — fetch status + findings
 
+On a failed scan, the `scan` object carries a short, sanitized `error` reason (never the raw API key or stack) so the UI can explain what went wrong.
+
 ```json
 {
-  "scan": { "id": "8f3c1e2a-...", "status": "completed" },
+  "scan": { "id": "8f3c1e2a-...", "status": "completed", "error": null },
   "findings": [
     {
       "cwe": "CWE-78",
@@ -174,8 +185,9 @@ Returns the full **SARIF 2.1.0 + Errata 01** document from R2 (CWE taxonomy, `pa
 
 | Method & Path | Purpose |
 | --- | --- |
-| `POST /api/scans` | Validate, envelope-encrypt key, store source in R2, enqueue → `202 {id}` |
-| `GET /api/scans/:id` | `{ scan, findings }` |
+| `POST /api/scans` | Rate-limit (demo), validate, envelope-encrypt key, store source in R2, enqueue → `202 {id}` (`429` if the demo limit is hit) |
+| `GET /api/scans/:id` | `{ scan, findings }` (`scan.error` set when `status:"failed"`) |
+| `POST /api/webhook/github` | GitHub PR webhook — HMAC-verified, enqueues a scan and comments findings on the PR (`503` until `GITHUB_*` secrets are set) |
 | `GET /api/scans/:id/sarif` | SARIF 2.1.0 document from R2 |
 | `GET /api/health` | Liveness |
 
@@ -200,6 +212,8 @@ AIHarness is deliberately aligned to recognized security and AI-governance stand
 > **Footnote:** Executive Order 14110 was **revoked 2025-01-20**. AIHarness aligns to SSDF and the AI RMF on technical merit, independent of that EO.
 >
 > ¹ **Non-certification disclaimer:** AIHarness is not certified to ISO/IEC 27001, ISO/IEC 42001, or SOC 2. It aligns to and references their controls as design and evaluation guidance.
+>
+> **Scope note:** AIHarness programmatically maps findings to **CWE** today. MITRE ATT&CK, CAPEC, ISA/IEC 62443, and ISO/IEC 5055 are listed as **reference frameworks we align to** — findings are not yet mapped to them (ISA/IEC 62443 mapping is planned, P4).
 
 ---
 
@@ -208,10 +222,11 @@ AIHarness is deliberately aligned to recognized security and AI-governance stand
 - **BYO-key, shredded** — keys are AES-GCM envelope-encrypted, scoped to one job, and deleted on every exit path.
 - **Prompt-injection defense** — code-as-data delimiters + strict-schema output (OWASP LLM01).
 - **Evidence-based confidence** — corroboration, not model self-rating.
-- **Defense in depth** — container path-traversal guard, XSS-safe DOM rendering, parameterized SQL, least-privilege KEK.
+- **Demo abuse control** — a fixed-window rate limiter (`src/orchestrator/ratelimit.ts`) on `POST /api/scans` caps the demo key spend at **20 scans / IP / hour** and **300 scans / hour globally**, backed by the `RATE_LIMIT` KV namespace (no-op when unbound, e.g. local/tests).
+- **Defense in depth** — container path-traversal guard, XSS-safe DOM rendering, parameterized SQL, least-privilege KEK, SSRF host-allowlist + 10 s timeout + `redirect:"error"` on the git-url fetch.
 - **Self-scan (2026-06-24):** **0 production-dependency vulnerabilities**; SARIF output **validated by an automated test (`npm test`) against the official SARIF 2.1.0 schema**; **CycloneDX SBOM (`sbom.json`, 148 components)** committed and regenerated via `npm run sbom`; manual review clean.
 
-> **Honest caveat:** authN/Z + RBAC + per-tenant isolation is a **roadmap item (P3)**. The demo endpoint is currently **unauthenticated**, mitigated by unguessable UUIDv4 scan IDs and BYO/demo keys. **Place [Cloudflare Access](https://www.cloudflare.com/zero-trust/products/access/) in front of any sensitive use.**
+> **Honest caveat:** authN/Z + RBAC + per-tenant isolation is a **roadmap item (P3)**. The demo endpoint is currently **unauthenticated**, rate-limited and mitigated by unguessable UUIDv4 scan IDs. Scanned **source is deleted from R2 when the job ends**, but **findings + SARIF persist** and are readable by anyone holding the scan's UUID — so treat the scan URL as a secret, **don't scan sensitive code in the public demo**, and **place [Cloudflare Access](https://www.cloudflare.com/zero-trust/products/access/) in front of any private use.**
 
 See **[SECURITY.md](./SECURITY.md)** for the full posture.
 
@@ -220,7 +235,7 @@ See **[SECURITY.md](./SECURITY.md)** for the full posture.
 ## Testing
 
 ```bash
-npm test            # 67 tests (full vitest suite)
+npm test            # 69 tests (full vitest suite)
 npx tsc --noEmit    # type-check (src is clean)
 ```
 
@@ -241,7 +256,7 @@ aiharness/
 │   ├── index.ts            # Worker entry (Hono app + ASSETS)
 │   ├── types.ts
 │   ├── schema.ts           # zod schemas
-│   ├── orchestrator/       # routes + validate.ts + webhook.ts (PR-webhook bot)
+│   ├── orchestrator/       # routes + validate.ts + ratelimit.ts (demo KV limiter) + webhook.ts (PR-webhook bot)
 │   ├── input-adapters/     # git-url.ts (fetch public GitHub repo ≤50 files/256 KB)
 │   ├── integrations/       # github-pr.ts (PR comment posting)
 │   ├── scan-runner/        # runner.ts (container-enabled Durable Object)

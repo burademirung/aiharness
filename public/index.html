@@ -251,7 +251,7 @@
         <article class="std-card reveal">
           <h3>Supply chain</h3>
           <ul>
-            <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA v1.0</a></li>
+            <li><a href="https://slsa.dev/" target="_blank" rel="noopener noreferrer">SLSA (v1.x)</a></li>
             <li><a href="https://cyclonedx.org/" target="_blank" rel="noopener noreferrer">CycloneDX SBOM</a></li>
             <li><a href="https://www.cisa.gov/sbom" target="_blank" rel="noopener noreferrer">CISA SBOM</a></li>
           </ul>
@@ -348,7 +348,7 @@
       <ul class="self-list reveal">
         <li>Manual review clean: BYO-key lifecycle, container path-traversal guard, parameterized SQL, XSS-safe DOM.</li>
         <li>Our SARIF output is validated by an automated test (ajv vs the official SARIF 2.1.0 schema).</li>
-        <li>A CycloneDX SBOM (148 components) is generated as part of the build.</li>
+        <li>A CycloneDX SBOM (148 components) is committed to the repo (<code>sbom.json</code>) and regenerated via <code>npm run sbom</code>.</li>
         <li>LLM-only findings are labeled &ldquo;needs review&rdquo; — we don't overclaim.</li>
       </ul>
     </div>

@@ -287,4 +287,51 @@ describe("fetchRepoFiles", () => {
       fetchRepoFiles("https://github.com/owner/nonexistent", { fetchImpl })
     ).rejects.toThrow();
   });
+
+  it("sends an Authorization: Bearer header on every fetch when a token is provided", async () => {
+    const seenAuth: Array<string | null> = [];
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      seenAuth.push(headers["authorization"] ?? null);
+      const body =
+        url.includes("git/trees/main") ? makeTreeResponse([{ path: "src/app.py", size: 50 }]) :
+        url.includes("raw.githubusercontent.com") ? "print('hi')" :
+        makeRepoResponse("main");
+      return {
+        ok: true, status: 200,
+        json: async () => body,
+        text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+      } as unknown as Response;
+    };
+
+    const result = await fetchRepoFiles("https://github.com/owner/repo", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: "ghp_secrettoken",
+    });
+    expect(result.files).toHaveLength(1);
+    expect(seenAuth.length).toBe(3); // repo meta + tree + 1 raw blob
+    expect(seenAuth.every((a) => a === "Bearer ghp_secrettoken")).toBe(true);
+  });
+
+  it("sends NO Authorization header when no token is provided", async () => {
+    let sawAuth = false;
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      if (headers["authorization"]) sawAuth = true;
+      const body =
+        url.includes("git/trees/main") ? makeTreeResponse([{ path: "src/app.py", size: 50 }]) :
+        url.includes("raw.githubusercontent.com") ? "print('hi')" :
+        makeRepoResponse("main");
+      return {
+        ok: true, status: 200,
+        json: async () => body,
+        text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+      } as unknown as Response;
+    };
+
+    await fetchRepoFiles("https://github.com/owner/repo", {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(sawAuth).toBe(false);
+  });
 });

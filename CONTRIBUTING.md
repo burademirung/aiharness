@@ -25,7 +25,15 @@ Local secrets go in `.dev.vars` (gitignored — never commit this file):
 ```ini
 KEK=<your-base64-kek>
 DEMO_ANTHROPIC_KEY=sk-ant-...
+# Optional — only to test the PR webhook or raise the git-url GitHub rate limit:
+# GITHUB_WEBHOOK_SECRET=...
+# GITHUB_TOKEN=ghp_...
 ```
+
+For a remote deploy you also create the rate-limiter KV namespace
+(`wrangler kv namespace create RATE_LIMIT`, wire its id into `wrangler.jsonc`) and apply
+the D1 migrations (`0001_init`, `0002_pr_jobs`, `0003_scan_error`) with `npm run migrate:remote`.
+Regenerate the committed CycloneDX SBOM with `npm run sbom`.
 
 ---
 
@@ -99,7 +107,7 @@ Before making architectural changes, read:
 
 - **`AGENTS.md`** — operational notes, deploy gotchas (Docker requirement, `claude-opus-4-8` rejecting `temperature`, Semgrep line-redaction workaround, Cloudflare bot-UA issue, custom-domain DNS re-provisioning, test config differences).
 - **`docs/superpowers/specs/`** and **`docs/superpowers/plans/`** — design specs and implementation plans.
-- **`docs/security/self-scan/`** — self-scan results and SARIF reports.
+- **`docs/security/self-scan-2026-06-24.md`** — the dated self-scan results.
 
 Key gotchas summary (see AGENTS.md for details):
 - `npm run deploy` requires Docker running.

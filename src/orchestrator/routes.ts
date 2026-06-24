@@ -35,7 +35,9 @@ api.post("/scans", async (c) => {
   const hasFiles = Array.isArray(files) && files.length > 0;
   if (!hasFiles && v.value.repoUrl) {
     try {
-      const fetched = await fetchRepoFiles(v.value.repoUrl);
+      // Pass the optional server GITHUB_TOKEN to raise the GitHub REST rate
+      // limit (60/h unauth → 5000/h). No-op when unset.
+      const fetched = await fetchRepoFiles(v.value.repoUrl, { token: c.env.GITHUB_TOKEN });
       language = fetched.language;
       files = fetched.files;
     } catch (err) {

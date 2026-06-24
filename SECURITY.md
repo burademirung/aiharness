@@ -34,6 +34,8 @@ AIHarness is designed and evaluated against the following standards and framewor
 | OWASP ASVS 5.0 | https://owasp.org/www-project-application-security-verification-standard/ |
 | OWASP Top 10 for LLM Apps (2025) | https://genai.owasp.org/llm-top-10/ |
 | CWE / CWE Top 25 (2024) | https://cwe.mitre.org/ · https://cwe.mitre.org/top25/archive/2024/2024_cwe_top25.html |
+| MITRE ATT&CK ² | https://attack.mitre.org/ |
+| MITRE CAPEC ² | https://capec.mitre.org/ |
 | SARIF 2.1.0 (OASIS) | https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html |
 | NIST SSDF SP 800-218 | https://csrc.nist.gov/pubs/sp/800/218/final |
 | NIST SSDF SP 800-218A (AI systems) | https://csrc.nist.gov/pubs/sp/800/218/a/final |
@@ -46,11 +48,14 @@ AIHarness is designed and evaluated against the following standards and framewor
 | ISO/IEC 27001 ¹ | https://www.iso.org/standard/27001 |
 | ISO/IEC 42001:2023 (AI Management) ¹ | https://www.iso.org/standard/42001 |
 | SOC 2 ¹ | https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2 |
-| ISA/IEC 62443 (OT/ICS) | https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards |
+| ISA/IEC 62443 (OT/ICS) ² | https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards |
+| ISO/IEC 5055 (code quality) ² | https://www.iso.org/standard/80623.html |
 
 > **Note on EO 14110:** Executive Order 14110 ("Safe, Secure, and Trustworthy AI") was revoked on 2025-01-20. AIHarness aligns to NIST SSDF and NIST AI RMF on technical merit, not the EO.
 >
 > ¹ **Non-certification disclaimer:** AIHarness is not certified to ISO/IEC 27001, ISO/IEC 42001, or SOC 2. It aligns to and references their controls as design and evaluation guidance.
+>
+> ² **Reference-only alignment:** AIHarness maps findings to **CWE** today. MITRE ATT&CK, CAPEC, ISA/IEC 62443, and ISO/IEC 5055 are listed as **reference frameworks we align to**; findings are **not** programmatically mapped to them yet (62443 mapping is planned, roadmap P4).
 
 ---
 
@@ -60,11 +65,16 @@ The following security properties are enforced by design and reviewed on every c
 
 ### Key and Secret Handling
 - **BYO-key envelope encryption:** API keys are AES-GCM envelope-encrypted (per-job DEK wrapped by a KEK Worker secret with `wrapKey`/`unwrapKey` — least-privilege access). The plaintext key is never logged or persisted.
-- **Key shredding:** The encrypted key record and decrypted key are deleted immediately after the scan job completes (or fails), in a `finally` block.
-- **Secrets never in code or logs:** `.dev.vars` is gitignored. `KEK` and `DEMO_ANTHROPIC_KEY` are Cloudflare Worker secrets.
+- **Key shredding:** The encrypted key record and decrypted key are deleted on every exit path — in `runScan`'s `finally` block (whether the scan completes, fails, or the pre-flight load throws), and on the orchestrator's pre-enqueue failure path.
+- **Secrets never in code or logs:** `.dev.vars` is gitignored. The **only secrets are Worker Secrets**: `KEK` and `DEMO_ANTHROPIC_KEY` (required), plus optional `GITHUB_WEBHOOK_SECRET` and `GITHUB_TOKEN` (PR webhook / raising the git-url GitHub rate limit). The `account_id`, D1 `database_id`, queue and bucket names committed in `wrangler.jsonc` are **non-credential identifiers** (not secrets) and are intentionally kept in the repo — they are not exploitable without the Worker Secrets.
+
+### Demo Abuse Control
+- **Rate limiting:** `POST /api/scans` is gated by a fixed-window KV rate limiter (`src/orchestrator/ratelimit.ts`) — **20 scans / IP / hour** and **300 scans / hour globally** — bounding demo-key spend and pipeline DoS. Backed by the `RATE_LIMIT` KV namespace; a no-op (allow all) when the binding is absent (local/tests).
+- **Input caps:** max 50 files, max 256 KB total (UTF-8). The git-url adapter additionally pins outbound fetches to a GitHub host allowlist with a 10 s timeout and `redirect:"error"` (SSRF defence).
 
 ### Source Code Handling
-- **Source TTL / deletion:** Uploaded source files are stored in R2 only for the duration of the scan job, then deleted. Queue messages carry only a `{scanId}` pointer — source code never transits the queue.
+- **Source deletion:** Uploaded source files are stored in R2 only for the duration of the scan job, then deleted when the job ends. Queue messages carry only a `{scanId}` pointer — source code never transits the queue.
+- **Findings & SARIF persistence (be aware):** The triaged findings (D1) and the SARIF report (`sarif/<id>.json` in R2) are **retained** (D1 has no native TTL) and are readable by anyone holding the scan's unguessable UUIDv4 id. Findings/SARIF may contain snippets of the scanned code. **Do not scan sensitive or private code in the public unauthenticated demo.** For private use, gate the API behind Cloudflare Access; to bound retention, add an [R2 lifecycle rule](https://developers.cloudflare.com/r2/buckets/object-lifecycles/) on the `sarif/` prefix and prune old D1 rows.
 - **Never used for training:** Source code is sent to the LLM solely for security triage of the current scan and is not retained by the service for model training purposes.
 
 ### AI / LLM Security
@@ -90,9 +100,11 @@ The following security properties are enforced by design and reviewed on every c
 
 ### Known Gap: Authentication / Authorization
 
-The demo endpoint is currently **unauthenticated**. Access is mitigated by:
-- Unguessable UUIDv4 scan IDs (no enumeration)
+The demo endpoint is currently **unauthenticated** (but rate-limited — see Demo Abuse Control above). Object-level access is mitigated by:
+- Unguessable UUIDv4 scan IDs (no enumeration — they function as capability tokens)
 - BYO-key model (callers supply their own API key, or the demo key is used for the shared demo path only)
+
+Residual risk: a leaked scan URL (browser history, shared link, proxy/CI logs) exposes that scan's persisted findings/SARIF. Treat the scan URL as a secret, and do not scan sensitive code in the public demo.
 
 **Cloudflare Access is recommended before using AIHarness in any sensitive or production context.** AuthN/Z + RBAC + per-tenant isolation is on the roadmap (P3).
 

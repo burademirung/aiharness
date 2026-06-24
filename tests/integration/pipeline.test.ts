@@ -59,6 +59,8 @@ describe("end-to-end pipeline (mocked container + model)", () => {
     const scan = await getScan(env.DB, id);
     expect(scan?.status).toBe("failed");                 // Fix 1: status must be "failed"
     expect(await getJobKey(env.DB, id)).toBeNull();      // key must still be shredded
+    // Scan error surfacing: a short, sanitized reason is persisted & queryable.
+    expect(scan?.error).toBe("container down");
   });
 
   it("is idempotent: re-running a completed scan is a no-op and does not flip its status", async () => {

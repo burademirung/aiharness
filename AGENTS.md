@@ -12,21 +12,29 @@ Live: https://aiharness.degenito.ai
 
 ```sh
 npm install
-npm test                 # vitest workspace — 67 tests (workerd pool + Node pool)
+npm test                 # vitest workspace — 69 tests (workerd pool + Node pool)
 npx tsc --noEmit         # type-check src (currently clean)
 npm run dev              # wrangler dev (local)
 npm run deploy           # wrangler deploy — REQUIRES Docker daemon running (builds Semgrep image)
-npm run migrate:local    # apply D1 migrations locally
+npm run migrate:local    # apply D1 migrations locally (0001_init, 0002_pr_jobs, 0003_scan_error)
 npm run migrate:remote   # apply D1 migrations to production
+npm run sbom             # regenerate CycloneDX sbom.json (one-time supply-chain snapshot)
+npm run typecheck        # tsc --noEmit (src is clean; tests/ have known cloudflare:test type gaps)
 ```
+
+**Before first deploy:** create the rate-limiter KV namespace and wire its id:
+`wrangler kv namespace create RATE_LIMIT` → paste the id into `wrangler.jsonc → kv_namespaces[].id`.
 
 ---
 
 ## Architecture Map
 
 ```
-src/index.ts            Entry point — Hono app, Env bindings, queue consumer handler
+src/index.ts            Entry point — Hono app, Env bindings (DB, SOURCE, SCAN_QUEUE,
+                        SCAN_RUNNER, ASSETS, KEK, DEMO_ANTHROPIC_KEY?, GITHUB_WEBHOOK_SECRET?,
+                        GITHUB_TOKEN?, RATE_LIMIT?), queue consumer handler
 src/orchestrator/       Route handlers (POST /api/scans, GET /api/scans/:id, etc.) + zod validation
+                        ratelimit.ts — demo KV rate limiter (20/IP/hr + 300/hr global; no-op if KV unbound)
                         webhook.ts — PR-webhook bot (HMAC verify, scan changed files, post PR comment)
 src/input-adapters/     git-url.ts — fetch a public GitHub repo's source (≤50 files / 256 KB)
 src/integrations/       github-pr.ts — post findings as a PR comment
@@ -72,7 +80,7 @@ Config files:
   - deterministic + LLM-refuted → `low`
   - model-only → `low` / `"needs review"`
 - **Prompt-injection defense** — scanned code is passed as data inside `BEGIN_CODE_WINDOW`/`END_CODE_WINDOW` delimiters; the system prompt instructs the model to treat content as data only and output strict JSON. Do not weaken this boundary.
-- **Secrets via wrangler** — `wrangler secret put KEK` / `wrangler secret put DEMO_ANTHROPIC_KEY`. Local dev: `.dev.vars` (gitignored). Never commit keys.
+- **Secrets via wrangler** — required: `KEK`, `DEMO_ANTHROPIC_KEY`. Optional (PR webhook / raise git-url rate limit): `GITHUB_WEBHOOK_SECRET`, `GITHUB_TOKEN`. Local dev: `.dev.vars` (gitignored). Never commit keys. **The ONLY secrets are these Worker Secrets** — the `account_id` / `database_id` / queue / bucket names committed in `wrangler.jsonc` are **non-credential identifiers** (not secrets) and are intentionally kept in the repo.
 
 ---
 
@@ -108,7 +116,7 @@ Config files:
 - **Keep the prompt-injection (code-as-data) invariant** — the `BEGIN_CODE_WINDOW`/`END_CODE_WINDOW` delimiters and the "treat as data" system-prompt instruction must not be removed or weakened.
 - **Keep XSS-safe rendering** — never switch finding-field rendering from `textContent` to `innerHTML`.
 - **Do not weaken size caps** — the 50-file / 256 KB limits exist to prevent abuse of the demo key.
-- **The demo endpoint is intentionally unauthenticated** (authN/RBAC is P3, not yet built). Do not assume auth middleware exists. Scan ids are unguessable UUIDv4s; that is the current access control for demo results.
+- **The demo endpoint is intentionally unauthenticated** (authN/RBAC is P3, not yet built) but **rate-limited** via `src/orchestrator/ratelimit.ts` (KV-backed; keep this gate). Do not assume auth middleware exists. Scan ids are unguessable UUIDv4s; that is the current access control for demo results. Findings + SARIF persist (no TTL) — don't scan sensitive code in the public demo.
 
 ---
 

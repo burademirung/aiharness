@@ -34,6 +34,19 @@ const FETCH_TIMEOUT_MS = 10_000;
 const ALLOWED_HOSTS = new Set(["api.github.com", "raw.githubusercontent.com"]);
 
 /**
+ * Build the base request headers, optionally adding a GitHub Authorization header.
+ * When a server `GITHUB_TOKEN` is configured, authenticated requests raise the
+ * GitHub REST rate limit from 60/h (unauthenticated, per shared egress IP) to
+ * 5000/h. The host allowlist still applies, so the token is only ever sent to
+ * api.github.com / raw.githubusercontent.com.
+ */
+function authHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = { "user-agent": "aiharness" };
+  if (token && token.trim()) headers["authorization"] = `Bearer ${token.trim()}`;
+  return headers;
+}
+
+/**
  * Assert a constructed URL targets an allowlisted GitHub host, then return
  * RequestInit hardened against SSRF: a 10s timeout and `redirect: "error"` so a
  * malicious redirect cannot bounce the request to another host.
@@ -126,6 +139,8 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl | null {
 export interface FetchRepoOptions {
   /** Injectable fetch implementation (default: global fetch). For testing. */
   fetchImpl?: typeof fetch;
+  /** Optional GitHub token. When set, requests are authenticated (5000/h limit). */
+  token?: string;
 }
 
 export interface RepoFiles {
@@ -141,20 +156,19 @@ export interface RepoFiles {
  */
 export async function fetchRepoFiles(
   url: string,
-  { fetchImpl = fetch }: FetchRepoOptions = {}
+  { fetchImpl = fetch, token }: FetchRepoOptions = {}
 ): Promise<RepoFiles> {
   const parsed = parseGitHubUrl(url);
   if (!parsed) throw new Error(`Not a valid GitHub URL: ${url}`);
 
   const { owner, repo } = parsed;
   let ref = parsed.ref;
+  const headers = authHeaders(token);
 
   // Step (a): resolve default branch if ref not given in URL
   if (!ref) {
     const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
-    const repoRes = await fetchImpl(repoUrl, safeInit(repoUrl, {
-      headers: { "user-agent": "aiharness" },
-    }));
+    const repoRes = await fetchImpl(repoUrl, safeInit(repoUrl, { headers }));
     if (!repoRes.ok) {
       await assertNotRateLimited(repoRes);
       throw new Error(
@@ -167,9 +181,7 @@ export async function fetchRepoFiles(
 
   // Step (b): get the tree recursively
   const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
-  const treeRes = await fetchImpl(treeUrl, safeInit(treeUrl, {
-    headers: { "user-agent": "aiharness" },
-  }));
+  const treeRes = await fetchImpl(treeUrl, safeInit(treeUrl, { headers }));
   if (!treeRes.ok) {
     await assertNotRateLimited(treeRes);
     throw new Error(
@@ -211,9 +223,7 @@ export async function fetchRepoFiles(
     if (files.length >= MAX_FILES) break;
 
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${entry.path}`;
-    const rawRes = await fetchImpl(rawUrl, safeInit(rawUrl, {
-      headers: { "user-agent": "aiharness" },
-    }));
+    const rawRes = await fetchImpl(rawUrl, safeInit(rawUrl, { headers }));
     if (!rawRes.ok) {
       await assertNotRateLimited(rawRes);
       continue; // skip files that can't be fetched

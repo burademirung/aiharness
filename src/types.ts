@@ -33,6 +33,7 @@ export interface ScanJob {
   sourceKey: string;       // R2 key
   modelId: string;
   modelVersion: string;
+  error?: string | null;   // short, sanitized failure reason (populated on "failed")
 }
 
 export interface PrJob {

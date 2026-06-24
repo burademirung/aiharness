@@ -83,6 +83,7 @@ export class ScanRunner extends DurableObject<Env> {
     // re-delete its source. The job-key shred, however, ALWAYS runs (it is idempotent).
     let processed = false;
     let succeeded = false;
+    let errorReason: string | null = null;
     try {
       // Load + idempotency guard INSIDE the try so that if getScan throws, the finally
       // still runs and shreds the key. A retry of an already-finished scan must be a
@@ -156,6 +157,10 @@ export class ScanRunner extends DurableObject<Env> {
       // Error is recorded via succeeded=false; do not re-throw so the finally
       // cleanup always runs and callers (queue handler) see a resolved promise.
       console.error("runScan error for", scanId, err);
+      // Persist a SHORT, sanitized reason (never the raw stack / API key) so
+      // GET /api/scans/:id can tell the user why it failed. Cap the length.
+      const raw = err instanceof Error ? err.message : "scan failed";
+      errorReason = raw.replace(/\s+/g, " ").trim().slice(0, 200);
     } finally {
       // ALWAYS shred the key — idempotent (safe on a no-op retry where the key is
       // already gone). This runs even if getScan threw before `processed` was set.
@@ -163,7 +168,7 @@ export class ScanRunner extends DurableObject<Env> {
       // Status flip + source delete only when we actually committed to processing,
       // so an idempotent no-op retry does NOT flip a completed scan's status.
       if (processed) {
-        await setScanStatus(env.DB, scanId, succeeded ? "completed" : "failed");
+        await setScanStatus(env.DB, scanId, succeeded ? "completed" : "failed", errorReason);
         await env.SOURCE.delete(`source/${scanId}.json`).catch(() => {});  // TTL: drop source
       }
     }

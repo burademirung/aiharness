@@ -74,12 +74,17 @@ A **Hono** app running on Cloudflare Workers. It owns the public HTTP surface an
 
 | Method & Path | Behavior |
 | --- | --- |
-| `POST /api/scans` | Validate input + size caps → resolve input (git-url adapter if `repoUrl`) → store source in R2 → write job to D1 → envelope-encrypt the API key → enqueue `{scanId}` → `202 {id}` |
-| `GET /api/scans/:id` | `{ scan, findings }` from D1 |
+| `POST /api/scans` | **Rate-limit (demo)** → validate input + size caps → resolve input (git-url adapter if `repoUrl`) → store source in R2 → write job to D1 → envelope-encrypt the API key → enqueue `{scanId}` → `202 {id}` |
+| `GET /api/scans/:id` | `{ scan, findings }` from D1 (`scan.error` carries a short sanitized reason when `status:"failed"`) |
 | `GET /api/scans/:id/sarif` | SARIF document from R2 |
+| `POST /api/webhook/github` | HMAC-verified GitHub PR webhook → enqueue scan + post findings comment (`503` until `GITHUB_*` secrets are set) |
 | `GET /api/health` | Liveness |
 
 The orchestrator never runs Semgrep or the model itself — it is purely the intake, persistence, and dispatch boundary.
+
+#### Demo rate limiter — `src/orchestrator/ratelimit.ts`
+
+`POST /api/scans` is gated by a **fixed-window KV rate limiter** that bounds demo-key spend and the scan-pipeline DoS surface: **20 scans / IP / hour** (keyed on `CF-Connecting-IP`) and **300 scans / hour globally**. Counters live in the `RATE_LIMIT` KV namespace with a TTL equal to the window, so they self-expire. When the KV binding is unset (local dev / tests) the limiter is a **no-op (allow all)**. The PR webhook is exempt — it has its own HMAC signature auth.
 
 ### Input-adapters layer — `src/input-adapters/`
 
@@ -159,7 +164,7 @@ AES-GCM **envelope encryption**: a per-job **DEK** (data encryption key) is wrap
 
 ### D1 schema — `src/db/queries.ts`
 
-Cloudflare D1 tables: **`scans`**, **`findings`**, **`job_keys`**, **`audit_log`**. All queries are **parameterized**.
+Cloudflare D1 tables: **`scans`** (incl. a short sanitized `error` column for failed scans), **`findings`**, **`job_keys`**, **`audit_log`**, and **`pr_jobs`** (PR context for webhook scans). All queries are **parameterized**. Migrations: `0001_init`, `0002_pr_jobs`, `0003_scan_error`.
 
 ### Validation — `src/orchestrator/validate.ts`, `src/schema.ts`
 
@@ -179,9 +184,10 @@ Static assets served by the Worker's `ASSETS` binding: a light, premium showcase
 | **Durable Objects + Containers** | Single-owner, stateful scan execution that can host and drive the Semgrep container |
 | **Queues** | Async dispatch; decouples fast intake from slow scanning; fail-fast `max_retries: 0` |
 | **D1** | Relational store for scans, findings, job keys, and the immutable audit log |
-| **R2** | Object store for submitted source (job-scoped TTL) and SARIF reports |
+| **R2** | Object store for submitted source (deleted at job end) and SARIF reports (persist; no TTL) |
+| **KV (`RATE_LIMIT`)** | Backs the demo per-IP + global rate limiter on `POST /api/scans` |
 | **Workers static Assets** | Serves the showcase site and demo |
-| **Secrets** | `KEK` (key-encryption key) and `DEMO_ANTHROPIC_KEY` (demo fallback) |
+| **Secrets** | `KEK` + `DEMO_ANTHROPIC_KEY` (required); `GITHUB_WEBHOOK_SECRET` + `GITHUB_TOKEN` (optional — PR webhook / raise git-url rate limit). Account/zone/DB ids in `wrangler.jsonc` are **non-secret identifiers**. |
 | **Custom domain** | `aiharness.degenito.ai` via Worker Custom Domain |
 
 ---
@@ -203,6 +209,7 @@ Static assets served by the Worker's `ASSETS` binding: a light, premium showcase
 These are hard-won; ignore them and a deploy or test run will mysteriously fail.
 
 1. **Docker daemon must be running** for `wrangler deploy` — it builds the Semgrep container image.
+0. **Provision the `RATE_LIMIT` KV namespace and apply migrations before first deploy** — `wrangler kv namespace create RATE_LIMIT`, paste the id into `wrangler.jsonc → kv_namespaces[].id`, then `npm run migrate:remote` (applies `0001`–`0003`). A missing KV binding silently disables rate limiting; an unapplied `0003` makes `scan.error` reads fail.
 2. **`claude-opus-4-8` rejects `temperature`** (HTTP 400) → omit the parameter entirely.
 3. **Container needs `enableInternet: true`** so Semgrep can fetch its `p/default` ruleset. Semgrep **redacts matched lines to `"requires login"`** for unauthenticated community use → **build the model code window from the real source files**, not from Semgrep's `lines`.
 4. **Cloudflare bot protection `403`s the `Python-urllib` user-agent** → use a browser UA for API tests.
@@ -213,12 +220,14 @@ These are hard-won; ignore them and a deploy or test run will mysteriously fail.
 
 ## Data lifecycle & security
 
-- **Source code** is stored in R2 only for the **job TTL** and **deleted** when the scan ends; it is **never used for model training**.
-- **Keys** are **shredded on every path** — `finally` blocks delete the wrapped job key whether the scan completes or fails. Plaintext keys are never logged or persisted.
+- **Source code** is stored in R2 only for the duration of the job and **deleted when the scan ends**; it is **never used for model training**.
+- **Findings + SARIF persist.** The findings rows (D1) and the SARIF object (`sarif/<id>.json` in R2) are **kept** (D1 has no native TTL) and are reachable only by the scan's unguessable UUIDv4 id. To bound retention, add an [R2 lifecycle rule](https://developers.cloudflare.com/r2/buckets/object-lifecycles/) on the `sarif/` prefix and prune old D1 rows.
+- **Keys** are **shredded on every path** — `finally` shreds the wrapped job key whether the scan completes, fails, or even if the pre-flight load throws; pre-enqueue failures in the route also shred. Plaintext keys are never logged or persisted.
+- **Rate-limited demo:** 20 scans / IP / hour + 300 / hour global (KV) bound demo-key spend and pipeline DoS.
 - **Audit log** (immutable, in D1) records, per scan: the **model id/version**, the **prompt hash** (SHA-256), the **ruleset versions**, and **timestamps** — enough to reconstruct and defend any finding.
-- **Defense in depth:** container path-traversal guard (`realpath` containment), prompt-injection defense (code-as-data delimiters + strict-schema output, OWASP LLM01), XSS-safe DOM rendering, parameterized SQL, least-privilege KEK.
+- **Defense in depth:** container path-traversal guard (`realpath` containment), prompt-injection defense (code-as-data delimiters + strict-schema output, OWASP LLM01), XSS-safe DOM rendering, parameterized SQL, least-privilege KEK, git-url SSRF host-allowlist + timeout + `redirect:"error"`.
 
-> **Roadmap gap (P3):** authN/Z + RBAC + per-tenant isolation are not yet built. The demo endpoint is currently **unauthenticated**, mitigated by unguessable UUIDv4 scan IDs and BYO/demo keys. **Recommend [Cloudflare Access](https://www.cloudflare.com/zero-trust/products/access/) before any sensitive use.**
+> **Roadmap gap (P3):** authN/Z + RBAC + per-tenant isolation are not yet built. The demo endpoint is **unauthenticated** (rate-limited), and findings/SARIF are accessible to anyone holding the scan's UUIDv4 id. **Don't scan sensitive code in the public demo**, treat the scan URL as a secret, and put [Cloudflare Access](https://www.cloudflare.com/zero-trust/products/access/) in front of any private use.
 
 ---
 

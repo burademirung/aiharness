@@ -16,7 +16,7 @@ export function buildSarif(findings: Finding[], meta: { toolVersion: string }): 
         tool: {
           driver: {
             name: "AIHarness",
-            informationUri: "https://aiharness.example",
+            informationUri: "https://aiharness.degenito.ai",
             version: meta.toolVersion,
             rules: [...new Set(findings.map((f) => f.ruleId))].map((id) => ({ id })),
           },

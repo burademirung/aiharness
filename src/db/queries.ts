@@ -1,4 +1,4 @@
-import type { Finding, ScanJob, ScanStatus } from "../types";
+import type { Finding, PrJob, ScanJob, ScanStatus } from "../types";
 
 export async function createScan(db: D1Database, s: ScanJob): Promise<void> {
   await db
@@ -63,6 +63,27 @@ export async function getJobKey(db: D1Database, scanId: string): Promise<string 
 
 export async function deleteJobKey(db: D1Database, scanId: string): Promise<void> {
   await db.prepare("DELETE FROM job_keys WHERE scan_id = ?").bind(scanId).run();
+}
+
+export async function storePrJob(db: D1Database, job: PrJob): Promise<void> {
+  await db
+    .prepare(
+      "INSERT OR REPLACE INTO pr_jobs (scan_id, owner, repo, pr_number, head_sha) VALUES (?,?,?,?,?)"
+    )
+    .bind(job.scanId, job.owner, job.repo, job.prNumber, job.headSha)
+    .run();
+}
+
+export async function getPrJob(db: D1Database, scanId: string): Promise<PrJob | null> {
+  const row = await db.prepare("SELECT * FROM pr_jobs WHERE scan_id = ?").bind(scanId).first();
+  if (!row) return null;
+  return {
+    scanId: row.scan_id as string,
+    owner: row.owner as string,
+    repo: row.repo as string,
+    prNumber: row.pr_number as number,
+    headSha: row.head_sha as string,
+  };
 }
 
 export async function appendAudit(db: D1Database, scanId: string, event: string, detail: unknown): Promise<void> {

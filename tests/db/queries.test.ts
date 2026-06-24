@@ -1,6 +1,6 @@
 import { env, applyD1Migrations } from "cloudflare:test";
 import { beforeAll, describe, it, expect } from "vitest";
-import { createScan, getScan, setScanStatus, storeJobKey, getJobKey, deleteJobKey, insertFindings, getFindings } from "../../src/db/queries";
+import { createScan, getScan, setScanStatus, storeJobKey, getJobKey, deleteJobKey, insertFindings, getFindings, storePrJob, getPrJob } from "../../src/db/queries";
 
 beforeAll(async () => {
   // @ts-expect-error provided by vitest-pool-workers test bindings
@@ -55,5 +55,20 @@ describe("db queries", () => {
     expect(findings[0].snippet).toBe("query = f\"SELECT * FROM users WHERE id = {id}\"");
     expect(findings[0].explanation).toBe("User input is directly interpolated into SQL query");
     expect(findings[0].remediation).toBe("Use parameterized queries instead of string interpolation");
+  });
+
+  it("stores and reads a pr_job (round-trip)", async () => {
+    await createScan(env.DB, {
+      id: "s4", language: "python", status: "queued",
+      sourceKey: "src/s4.tar", modelId: "claude", modelVersion: "claude-opus-4-8",
+    });
+    expect(await getPrJob(env.DB, "s4")).toBeNull();
+    await storePrJob(env.DB, {
+      scanId: "s4", owner: "acme", repo: "widgets", prNumber: 42, headSha: "deadbeef",
+    });
+    const job = await getPrJob(env.DB, "s4");
+    expect(job).toEqual({
+      scanId: "s4", owner: "acme", repo: "widgets", prNumber: 42, headSha: "deadbeef",
+    });
   });
 });

@@ -12,7 +12,7 @@ Live: https://aiharness.degenito.ai
 
 ```sh
 npm install
-npm test                 # vitest workspace — 31 tests (workerd pool + Node pool)
+npm test                 # vitest workspace — 62 tests (workerd pool + Node pool)
 npx tsc --noEmit         # type-check src (currently clean)
 npm run dev              # wrangler dev (local)
 npm run deploy           # wrangler deploy — REQUIRES Docker daemon running (builds Semgrep image)
@@ -27,20 +27,27 @@ npm run migrate:remote   # apply D1 migrations to production
 ```
 src/index.ts            Entry point — Hono app, Env bindings, queue consumer handler
 src/orchestrator/       Route handlers (POST /api/scans, GET /api/scans/:id, etc.) + zod validation
+                        webhook.ts — PR-webhook bot (HMAC verify, scan changed files, post PR comment)
+src/input-adapters/     git-url.ts — fetch a public GitHub repo's source (≤50 files / 256 KB)
+src/integrations/       github-pr.ts — post findings as a PR comment
 src/scan-runner/        runner.ts — ScanRunner Durable Object + container interaction
                         semgrep-normalize.ts — normalizes Semgrep JSON output
 src/adapters/           model-adapter.ts — ModelAdapter interface
                         claude.ts — ClaudeAdapter (claude-opus-4-8, no temperature)
+                        (OpenAI/Gemini: documented extension points; not yet shipped)
 src/triage/             triageFindings, computeConfidence (evidence-based, not model self-rating)
 src/report/             buildSarif (SARIF 2.1.0 + CWE taxonomies), recordAudit, hashPrompt
 src/crypto/             envelope.ts — AES-GCM envelope encryption (DEK wrapped by KEK)
 src/db/                 queries.ts — parameterized D1 queries only
 src/schema.ts           zod schemas for request validation + input caps
+integrations/
+  github-action/        CI/CD composite action (scans in CI, uploads SARIF)
 container/              Dockerfile (FROM semgrep/semgrep) + server.py (HTTP :8080, POST /scan)
 migrations/             D1 SQL migrations
 public/                 Static frontend (demo site, Matrix terminal, 3D diagram)
 tests/                  Vitest test files
 fixtures/               Test fixtures incl. vuln-sample/ (intentional planted vulnerabilities)
+docs/integrations/      ci-cd.md, pr-webhook.md
 ```
 
 Config files:
@@ -119,9 +126,9 @@ Config files:
 ## Roadmap
 
 - **P1a** — done and deployed: orchestrator + ScanRunner (DO + Container + Semgrep) + Claude adapter + envelope key vault + SARIF 2.1.0 + demo site.
-- **P1b** — secret scanning + dependency/SCA (OSV) + CycloneDX SBOM in container; result caching.
-- **P2** — OpenAI + Gemini adapters + model selector + adversarial self-verify.
-- **P3** — GitHub Action + PR webhook bot + public REST API + RBAC/auth + per-tenant isolation + diff/baseline/suppression.
+- **P1b** — done: Git repo URL input (`src/input-adapters/git-url.ts`); CI/CD GitHub Action (`integrations/github-action/`); PR-webhook bot (`src/orchestrator/webhook.ts` — requires user to set `GITHUB_WEBHOOK_SECRET` + `GITHUB_TOKEN` and register a GitHub App to activate).
+- **P2** — OpenAI + Gemini adapters (documented extension points; not yet shipped) + model selector + adversarial self-verify.
+- **P3** — RBAC/auth + per-tenant isolation + diff/baseline/suppression; secret scanning + dependency/SCA (OSV); result caching.
 - **P4** — published benchmark (precision/recall), policy/compliance profiles (ASVS L2, IEC 62443, CWE Top 25), private/air-gap model option, prompt-injection test suite.
 
 See `README.md` and `ARCHITECTURE.md` for full roadmap detail.

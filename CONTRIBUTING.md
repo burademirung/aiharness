@@ -88,7 +88,7 @@ Runs `wrangler dev`. Note: the Semgrep container requires Docker running and int
    - `docs:` documentation only
    - `chore:` tooling / config
 4. Ensure `npm test` and `npx tsc --noEmit` both pass locally.
-5. Open a PR against `main`. The CI workflow will run tests and type-check automatically.
+5. Open a PR against `main`. Run `npm test` and `npx tsc --noEmit` locally to confirm all checks pass before requesting review.
 6. A maintainer will review. Address feedback, then request re-review.
 
 ---

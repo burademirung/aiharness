@@ -69,7 +69,7 @@ export class ScanRunner extends DurableObject<Env> {
   }
 
   async runScan(scanId: string): Promise<void> {
-    const { getScan, setScanStatus, setScanSarifKey, insertFindings, getJobKey, deleteJobKey } = await import("../db/queries");
+    const { getScan, setScanStatus, setScanSarifKey, insertFindings, getJobKey, deleteJobKey, getPrJob } = await import("../db/queries");
     const { decryptKey } = await import("../crypto/envelope");
     const { triageFindings } = await import("../triage/engine");
     const { buildSarif } = await import("../report/sarif");
@@ -134,6 +134,18 @@ export class ScanRunner extends DurableObject<Env> {
         promptHash: await hashPrompt(SYSTEM_PROMPT), rulesetVersion: "p/default",
       });
       succeeded = true;
+
+      // If this scan originated from a PR webhook, post findings back to the PR.
+      // Guarded so a posting failure does NOT fail the scan (log + continue).
+      try {
+        const prJob = await getPrJob(env.DB, scanId);
+        if (prJob) {
+          const { postPrComment } = await import("../integrations/github-pr");
+          await postPrComment(env, prJob, triaged);
+        }
+      } catch (postErr) {
+        console.error("postPrComment failed for", scanId, postErr);
+      }
     } catch (err) {
       // Error is recorded via succeeded=false; do not re-throw so the finally
       // cleanup always runs and callers (queue handler) see a resolved promise.

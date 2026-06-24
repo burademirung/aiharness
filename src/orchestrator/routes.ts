@@ -5,8 +5,12 @@ import { encryptKey } from "../crypto/envelope";
 import { createScan, getScan, getFindings, storeJobKey } from "../db/queries";
 import { CLAUDE_MODEL } from "../adapters/claude";
 import { fetchRepoFiles } from "../input-adapters/git-url";
+import { webhook } from "./webhook";
 
 export const api = new Hono<{ Bindings: Env }>();
+
+// GitHub PR webhook: POST /api/webhook/github
+api.route("/webhook", webhook);
 
 api.post("/scans", async (c) => {
   const body = await c.req.json().catch(() => null);

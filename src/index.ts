@@ -14,6 +14,11 @@ export interface Env {
   KEK: string;
   // Server-side demo key used when a scan request omits apiKey (BYO key optional).
   DEMO_ANTHROPIC_KEY?: string;
+  // GitHub PR-webhook secrets (optional). If unset, the webhook returns 503
+  // "webhook not configured". GITHUB_WEBHOOK_SECRET verifies inbound signatures;
+  // GITHUB_TOKEN authenticates outbound GitHub API calls (file fetch + comment).
+  GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_TOKEN?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();

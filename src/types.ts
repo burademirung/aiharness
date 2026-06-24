@@ -35,6 +35,14 @@ export interface ScanJob {
   modelVersion: string;
 }
 
+export interface PrJob {
+  scanId: string;
+  owner: string;
+  repo: string;
+  prNumber: number;
+  headSha: string;
+}
+
 export interface TriageInput {
   finding: Finding;
   codeWindow: string;      // surrounding context, delimited

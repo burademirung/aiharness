@@ -12,7 +12,13 @@ export default defineWorkersConfig(async () => {
       poolOptions: {
         workers: {
           wrangler: { configPath: "./wrangler.test.jsonc" },
-          miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+          miniflare: {
+            bindings: {
+              TEST_MIGRATIONS: migrations,
+              // 32-byte AES-256 KEK (base64) so envelope crypto works in tests.
+              KEK: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            },
+          },
           // WORKAROUND: isolatedStorage and multi-worker mode trigger a miniflare
           // sqlite-shm frame-pop assertion when R2 is accessed inside
           // runInDurableObject. Consequence: D1 and R2 state is SHARED across all

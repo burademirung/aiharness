@@ -11,3 +11,4 @@ dist/
 /*.png
 .playwright-mcp/
 docs/site/
+/node_modules

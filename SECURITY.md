@@ -40,15 +40,17 @@ AIHarness is designed and evaluated against the following standards and framewor
 | NIST AI RMF (AI 100-1) | https://www.nist.gov/itl/ai-risk-management-framework |
 | NIST AI 600-1 Gen-AI Profile | https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence |
 | NIST CSF 2.0 | https://www.nist.gov/cyberframework |
-| SLSA v1.0 | https://slsa.dev/ |
-| CycloneDX SBOM | https://cyclonedx.org/ |
+| SLSA (v1.x) — referenced framework | https://slsa.dev/ (AIHarness does not yet produce SLSA provenance) |
+| CycloneDX SBOM | https://cyclonedx.org/ (`sbom.json`, 148 components; regenerated via `npm run sbom`) |
 | CISA SBOM Guidance | https://www.cisa.gov/sbom |
-| ISO/IEC 27001 | https://www.iso.org/standard/27001 |
-| ISO/IEC 42001:2023 (AI Management) | https://www.iso.org/standard/42001 |
-| SOC 2 | https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2 |
+| ISO/IEC 27001 ¹ | https://www.iso.org/standard/27001 |
+| ISO/IEC 42001:2023 (AI Management) ¹ | https://www.iso.org/standard/42001 |
+| SOC 2 ¹ | https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2 |
 | ISA/IEC 62443 (OT/ICS) | https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards |
 
 > **Note on EO 14110:** Executive Order 14110 ("Safe, Secure, and Trustworthy AI") was revoked on 2025-01-20. AIHarness aligns to NIST SSDF and NIST AI RMF on technical merit, not the EO.
+>
+> ¹ **Non-certification disclaimer:** AIHarness is not certified to ISO/IEC 27001, ISO/IEC 42001, or SOC 2. It aligns to and references their controls as design and evaluation guidance.
 
 ---
 
@@ -82,8 +84,8 @@ The following security properties are enforced by design and reviewed on every c
 | Check | Result |
 |---|---|
 | Production dependency vulnerabilities | **0** |
-| SARIF 2.1.0 schema validation (ajv, CI) | **Pass** |
-| CycloneDX SBOM | **148 components generated** |
+| SARIF 2.1.0 schema validation (automated test — `npm test`, ajv vs official schema) | **Pass** |
+| CycloneDX SBOM (`sbom.json`, regenerated via `npm run sbom`) | **148 components** |
 | Manual code review | **Clean** |
 
 ### Known Gap: Authentication / Authorization

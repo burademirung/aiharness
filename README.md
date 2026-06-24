@@ -10,7 +10,7 @@
 [![SARIF 2.1.0](https://img.shields.io/badge/SARIF-2.1.0-6f42c1?style=flat-square)](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/tests-31%20passing-22c55e?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-62%20passing-22c55e?style=flat-square)](#testing)
 
 ---
 
@@ -26,9 +26,9 @@ The result is delivered as **SARIF 2.1.0**, the OASIS standard consumable by Git
 
 ## Highlights
 
-- **Model-agnostic adapter** — a single `ModelAdapter` interface (`id`, `capabilities`, `analyze`). Ships with Claude; OpenAI and Gemini are drop-in extension points (implement the same interface). The interface *is* the model-agnostic story.
+- **Model-agnostic adapter** — a single `ModelAdapter` interface (`id`, `capabilities`, `analyze`). Ships with the Claude adapter today. OpenAI and Gemini are documented extension points — implement the same `ModelAdapter` interface; not yet shipped (only the Claude adapter ships today). The interface *is* the model-agnostic story.
 - **Hybrid, evidence-based confidence** — deterministic + LLM-confirmed → **high**; deterministic + LLM-uncertain → **medium**; deterministic + LLM-refuted → **low**; model-only → **low / needs review**.
-- **SARIF 2.1.0 + Errata 01** — CWE taxonomy block, `partialFingerprints`, and rich `properties` (confidence, verdict, evidence, remediation, CWE). Schema-validated in CI.
+- **SARIF 2.1.0 + Errata 01** — CWE taxonomy block, `partialFingerprints`, and rich `properties` (confidence, verdict, evidence, remediation, CWE). Validated by an automated test (`npm test`) against the official SARIF 2.1.0 schema.
 - **BYO-key envelope encryption** — bring your own model API key; it is AES-GCM envelope-encrypted, scoped to a single job, and **shredded** when the job ends. Or run the **keyless demo** (server demo key).
 - **Prompt-injection defense (OWASP LLM01)** — scanned code is passed strictly as *data* inside `BEGIN_CODE_WINDOW` / `END_CODE_WINDOW` delimiters; the system prompt forbids following instructions found in code; the model only fills a strict JSON schema.
 - **Never hard-fails** — model output is zod-validated with a bounded repair loop (3 attempts), then degrades to *uncertain / needs review*; API or container errors mark the scan `failed` rather than crashing.
@@ -77,7 +77,7 @@ See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the deep dive (component-by-com
 
 ```bash
 npm install
-npm test        # 31 tests (vitest workspace)
+npm test        # 62 tests (vitest workspace)
 npm run dev     # wrangler dev
 ```
 
@@ -110,18 +110,33 @@ npm run deploy
 
 `apiKey` is **optional**. Omit it to use the server demo key.
 
+**Variant 1 — paste/upload files:**
+
 ```bash
 curl -X POST https://aiharness.degenito.ai/api/scans \
   -H "Content-Type: application/json" \
   -H "User-Agent: Mozilla/5.0" \
   -d '{
+    "language": "python",
     "files": [
       { "path": "app.py", "content": "import os\nos.system(request.args.get(\"cmd\"))" }
     ]
   }'
 ```
 
-> **Note:** Cloudflare bot protection rejects the default `Python-urllib` user-agent with `403`. Use a browser UA when testing.
+**Variant 2 — Git repo URL** (fetches a public GitHub repo; no `files` needed):
+
+```bash
+curl -X POST https://aiharness.degenito.ai/api/scans \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: Mozilla/5.0" \
+  -d '{
+    "language": "python",
+    "repoUrl": "https://github.com/owner/repo"
+  }'
+```
+
+> **Note:** Cloudflare bot protection rejects the default `Python-urllib` user-agent with `403`. Use a browser UA when testing. The `language` field is required (omitting it returns `400`).
 
 **Response** (`202 Accepted`):
 
@@ -162,7 +177,6 @@ Returns the full **SARIF 2.1.0 + Errata 01** document from R2 (CWE taxonomy, `pa
 | `POST /api/scans` | Validate, envelope-encrypt key, store source in R2, enqueue → `202 {id}` |
 | `GET /api/scans/:id` | `{ scan, findings }` |
 | `GET /api/scans/:id/sarif` | SARIF 2.1.0 document from R2 |
-| `GET /api/scans/:id/stream` | Durable Object proxy (the UI uses polling) |
 | `GET /api/health` | Liveness |
 
 ---
@@ -179,11 +193,13 @@ AIHarness is deliberately aligned to recognized security and AI-governance stand
 | **Secure development** | [NIST SSDF SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final) · [SP 800-218A (AI)](https://csrc.nist.gov/pubs/sp/800/218/a/final) |
 | **AI risk management** | [NIST AI RMF (AI 100-1)](https://www.nist.gov/itl/ai-risk-management-framework) · [Gen-AI Profile (NIST AI 600-1)](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence) |
 | **Cyber governance** | [NIST CSF 2.0](https://www.nist.gov/cyberframework) |
-| **Supply chain** | [SLSA v1.0](https://slsa.dev/) · [CycloneDX SBOM](https://cyclonedx.org/) · [CISA SBOM](https://www.cisa.gov/sbom) |
-| **Management systems** | [ISO/IEC 27001](https://www.iso.org/standard/27001) · [ISO/IEC 42001:2023](https://www.iso.org/standard/42001) · [SOC 2](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2) |
+| **Supply chain** | [SLSA (v1.x)](https://slsa.dev/) (referenced framework; AIHarness does not yet produce SLSA provenance) · [CycloneDX SBOM](https://cyclonedx.org/) (`sbom.json`, 148 components, regenerated via `npm run sbom`) · [CISA SBOM](https://www.cisa.gov/sbom) |
+| **Management systems** | [ISO/IEC 27001](https://www.iso.org/standard/27001) · [ISO/IEC 42001:2023](https://www.iso.org/standard/42001) · [SOC 2](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2) ¹ |
 | **Industrial / code quality** | [ISA/IEC 62443](https://www.isa.org/standards-and-publications/isa-standards/isa-iec-62443-series-of-standards) · [ISO/IEC 5055](https://www.iso.org/standard/80623.html) |
 
 > **Footnote:** Executive Order 14110 was **revoked 2025-01-20**. AIHarness aligns to SSDF and the AI RMF on technical merit, independent of that EO.
+>
+> ¹ **Non-certification disclaimer:** AIHarness is not certified to ISO/IEC 27001, ISO/IEC 42001, or SOC 2. It aligns to and references their controls as design and evaluation guidance.
 
 ---
 
@@ -193,7 +209,7 @@ AIHarness is deliberately aligned to recognized security and AI-governance stand
 - **Prompt-injection defense** — code-as-data delimiters + strict-schema output (OWASP LLM01).
 - **Evidence-based confidence** — corroboration, not model self-rating.
 - **Defense in depth** — container path-traversal guard, XSS-safe DOM rendering, parameterized SQL, least-privilege KEK.
-- **Self-scan (2026-06-24):** **0 production-dependency vulnerabilities**; SARIF output **validated against the official 2.1.0 schema in CI**; **CycloneDX SBOM** (148 components); manual review clean.
+- **Self-scan (2026-06-24):** **0 production-dependency vulnerabilities**; SARIF output **validated by an automated test (`npm test`) against the official SARIF 2.1.0 schema**; **CycloneDX SBOM (`sbom.json`, 148 components)** committed and regenerated via `npm run sbom`; manual review clean.
 
 > **Honest caveat:** authN/Z + RBAC + per-tenant isolation is a **roadmap item (P3)**. The demo endpoint is currently **unauthenticated**, mitigated by unguessable UUIDv4 scan IDs and BYO/demo keys. **Place [Cloudflare Access](https://www.cloudflare.com/zero-trust/products/access/) in front of any sensitive use.**
 
@@ -204,7 +220,7 @@ See **[SECURITY.md](./SECURITY.md)** for the full posture.
 ## Testing
 
 ```bash
-npm test            # 31 tests
+npm test            # 62 tests (full vitest suite)
 npx tsc --noEmit    # type-check (src is clean)
 ```
 
@@ -225,9 +241,12 @@ aiharness/
 │   ├── index.ts            # Worker entry (Hono app + ASSETS)
 │   ├── types.ts
 │   ├── schema.ts           # zod schemas
-│   ├── orchestrator/       # routes + validate.ts
+│   ├── orchestrator/       # routes + validate.ts + webhook.ts (PR-webhook bot)
+│   ├── input-adapters/     # git-url.ts (fetch public GitHub repo ≤50 files/256 KB)
+│   ├── integrations/       # github-pr.ts (PR comment posting)
 │   ├── scan-runner/        # runner.ts (container-enabled Durable Object)
-│   ├── adapters/           # ModelAdapter interface + ClaudeAdapter (+ OpenAI/Gemini stubs)
+│   ├── adapters/           # ModelAdapter interface + ClaudeAdapter
+│   │                       # (OpenAI/Gemini: documented extension points, not yet shipped)
 │   ├── triage/             # triageFindings + computeConfidence
 │   ├── report/             # buildSarif + recordAudit + hashPrompt
 │   ├── crypto/             # envelope.ts (AES-GCM envelope encryption)
@@ -235,11 +254,16 @@ aiharness/
 ├── container/
 │   ├── Dockerfile          # FROM semgrep/semgrep
 │   └── server.py           # stdlib HTTP server on :8080
+├── integrations/
+│   └── github-action/      # CI/CD composite action (scans in CI, uploads SARIF)
 ├── migrations/             # D1 migrations
 ├── public/                 # static showcase site + live demo
 ├── tests/
 ├── fixtures/               # incl. vuln-sample/ (intentional planted-vuln corpus)
-├── docs/                   # specs, plans, security/self-scan, site reports
+├── docs/
+│   ├── integrations/       # ci-cd.md, pr-webhook.md
+│   └── ...                 # specs, plans, security/self-scan, site reports
+├── sbom.json               # CycloneDX SBOM (148 components), regenerated via npm run sbom
 ├── wrangler.jsonc          # production config
 ├── wrangler.test.jsonc     # test config (no containers block)
 ├── vitest.config.ts        # workers pool
@@ -249,14 +273,27 @@ aiharness/
 
 ---
 
+## Inputs / Integrations
+
+AIHarness supports **four input methods**, all implemented:
+
+| Method | How it works |
+| --- | --- |
+| **1. Paste / upload** | POST `/api/scans` with `files[]` — inline file content (max 50 files / 256 KB) |
+| **2. Git repo URL** | POST `/api/scans` with `repoUrl` — `src/input-adapters/git-url.ts` fetches a public GitHub repo's source within the same 50-file / 256 KB caps |
+| **3. CI/CD GitHub Action** | `integrations/github-action/` — composite action that runs a scan in CI and uploads results as a SARIF artifact. See [docs/integrations/ci-cd.md](./docs/integrations/ci-cd.md) |
+| **4. PR-webhook bot** | `src/orchestrator/webhook.ts` + `src/integrations/github-pr.ts` — verifies the HMAC signature, scans changed files, and comments findings on the PR. **Requires user activation:** set `GITHUB_WEBHOOK_SECRET` + `GITHUB_TOKEN` secrets and register a GitHub App. See [docs/integrations/pr-webhook.md](./docs/integrations/pr-webhook.md) |
+
+---
+
 ## Roadmap
 
 | Phase | Status | Scope |
 | --- | --- | --- |
 | **P1a** | ✅ Done (deployed) | Orchestrator + ScanRunner (DO + Container, Semgrep) + Claude adapter + envelope key vault + SARIF 2.1.0 + demo site |
-| **P1b** | Planned | Secret scanning + dependency/SCA (OSV) + CycloneDX SBOM in the container; result caching |
-| **P2** | Planned | OpenAI + Gemini adapters + selector + adversarial self-verify |
-| **P3** | Planned | GitHub Action + PR webhook bot + public REST API + RBAC/auth + per-tenant isolation + diff/baseline/suppression |
+| **P1b** | ✅ Done | Git repo URL input (`src/input-adapters/git-url.ts`); CI/CD GitHub Action (`integrations/github-action/`); PR-webhook bot (`src/orchestrator/webhook.ts` — requires user secrets + GitHub App to activate) |
+| **P2** | Planned | OpenAI + Gemini adapters (documented extension points; not yet shipped) + model selector + adversarial self-verify |
+| **P3** | Planned | RBAC/auth + per-tenant isolation + diff/baseline/suppression; secret scanning + dependency/SCA (OSV); result caching |
 | **P4** | Planned | Published benchmark (precision/recall), policy/compliance profiles (ASVS L2, IEC 62443, CWE Top 25), private/air-gap model option, prompt-injection test suite |
 
 ---

@@ -12,7 +12,7 @@ AIHarness is a **hybrid scanner**: a deterministic SAST floor (Semgrep) combined
 
 ```mermaid
 flowchart LR
-    A["Input<br/>(source files)"] --> B["Orchestrator Worker<br/>(Hono)"]
+    A["Input<br/>(paste/upload · git-url<br/>CI Action · PR webhook)"] --> B["Orchestrator Worker<br/>(Hono + input-adapters)"]
     B --> Q["Queue<br/>(aiharness-scans)"]
     Q --> C["ScanRunner<br/>(Durable Object)"]
     C --> S["Semgrep<br/>Container"]
@@ -35,11 +35,11 @@ sequenceDiagram
     participant Container as Semgrep Container
     participant Model as Model adapter
 
-    Client->>Worker: POST /api/scans { files, apiKey? }
-    Worker->>Worker: validate (≤50 files, ≤256 KB)
-    Worker->>D1: envelope-encrypt key → store wrapped DEK (job-scoped)
+    Client->>Worker: POST /api/scans { files/repoUrl, language, apiKey? }
+    Worker->>Worker: validate (≤50 files, ≤256 KB) + resolve input (git-url adapter if repoUrl)
     Worker->>R2: store source
     Worker->>D1: write scan job (status: queued)
+    Worker->>D1: envelope-encrypt key → store wrapped DEK (job-scoped)
     Worker->>Queue: enqueue { scanId } only
     Worker-->>Client: 202 { id }
 
@@ -74,13 +74,25 @@ A **Hono** app running on Cloudflare Workers. It owns the public HTTP surface an
 
 | Method & Path | Behavior |
 | --- | --- |
-| `POST /api/scans` | Validate input + size caps → envelope-encrypt the API key → store source in R2 → write job to D1 → enqueue `{scanId}` → `202 {id}` |
+| `POST /api/scans` | Validate input + size caps → resolve input (git-url adapter if `repoUrl`) → store source in R2 → write job to D1 → envelope-encrypt the API key → enqueue `{scanId}` → `202 {id}` |
 | `GET /api/scans/:id` | `{ scan, findings }` from D1 |
 | `GET /api/scans/:id/sarif` | SARIF document from R2 |
-| `GET /api/scans/:id/stream` | Durable Object proxy (present, but the UI uses polling) |
 | `GET /api/health` | Liveness |
 
 The orchestrator never runs Semgrep or the model itself — it is purely the intake, persistence, and dispatch boundary.
+
+### Input-adapters layer — `src/input-adapters/`
+
+Before source code reaches R2 and the queue, the orchestrator normalizes it through one of four input paths:
+
+| Path | Source | Implementation |
+| --- | --- | --- |
+| **Paste / upload** | `files[]` in the POST body | Inline; validated directly by `validate.ts` |
+| **Git repo URL** | `repoUrl` in the POST body | `src/input-adapters/git-url.ts` — fetches a public GitHub repo's source tree (≤50 files, ≤256 KB). See [docs/integrations/ci-cd.md](./docs/integrations/ci-cd.md) |
+| **CI/CD GitHub Action** | Composite Action in CI pipeline | `integrations/github-action/` — runs a scan in CI and uploads SARIF. See [docs/integrations/ci-cd.md](./docs/integrations/ci-cd.md) |
+| **PR-webhook bot** | GitHub webhook event | `src/orchestrator/webhook.ts` verifies HMAC signature; `src/integrations/github-pr.ts` fetches changed files and posts findings as a PR comment. **Requires user activation:** `GITHUB_WEBHOOK_SECRET` + `GITHUB_TOKEN` secrets + a registered GitHub App. See [docs/integrations/pr-webhook.md](./docs/integrations/pr-webhook.md) |
+
+All four paths converge on the same R2 → D1 → Queue pipeline after normalization.
 
 ### Queue — `aiharness-scans`
 
@@ -123,7 +135,7 @@ interface ModelAdapter {
 ```
 
 - **`ClaudeAdapter`** — model id `claude-opus-4-8`. **No `temperature` parameter** (that model deprecates it and returns HTTP 400). Determinism is anchored by the **pinned model id** plus a **recorded prompt hash** in the audit log — not by temperature.
-- **`OpenAIAdapter` / `GeminiAdapter`** — the documented extension point. **Adding a provider = implementing the same interface.** Everything downstream (triage, confidence, SARIF, audit) is provider-agnostic, so a new adapter needs no changes elsewhere.
+- **OpenAI / Gemini** — documented extension points; not yet shipped (only the Claude adapter ships today). **Adding a provider = implementing the same `ModelAdapter` interface.** Everything downstream (triage, confidence, SARIF, audit) is provider-agnostic, so a new adapter needs no changes elsewhere.
 
 ### Triage engine — `src/triage/`
 
@@ -138,7 +150,7 @@ interface ModelAdapter {
 
 ### Report / SARIF — `src/report/`
 
-- `buildSarif` emits **SARIF 2.1.0 + Errata 01 (OASIS)** with a CWE `taxonomies` block; each `result` carries `partialFingerprints` and `properties` (confidence, verdict, evidence, remediation, cwe). Output is **validated against the official SARIF 2.1.0 JSON Schema in CI (ajv)**.
+- `buildSarif` emits **SARIF 2.1.0 + Errata 01 (OASIS)** with a CWE `taxonomies` block; each `result` carries `partialFingerprints` and `properties` (confidence, verdict, evidence, remediation, cwe). Output is **validated by an automated test (`npm test`) against the official SARIF 2.1.0 JSON Schema (ajv)**.
 - `recordAudit` + `hashPrompt` (SHA-256) write an **immutable `audit_log`** to D1.
 
 ### Crypto / envelope encryption — `src/crypto/envelope.ts`

@@ -687,6 +687,7 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: var(--s
 .std-card a::after { content: "↗"; color: var(--ink-dim); font-size: .8rem; }
 .std-card a:hover { color: var(--signal-2); text-decoration: none; }
 .std-footnote { margin-top: 1.8rem; font-size: .86rem; color: var(--ink-dim); font-style: italic; max-width: 760px; }
+.std-note { font-size: .78rem; color: var(--ink-dim); font-style: italic; white-space: nowrap; }
 
 /* ===================== USE CASES / TRUST ===================== */
 .uc-grid, .trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.1rem; }

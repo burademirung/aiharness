@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -19,7 +20,7 @@
 
 <div class="topbar" role="note">
   <span class="topbar-credit">Built by <strong>Vladimir Kamenev</strong> for <strong>Chevron</strong> · <a class="topbar-phone" href="tel:5123369618">512&#8202;336&#8202;9618</a> · <a class="topbar-phone" href="mailto:burademirung@gmail.com">burademirung@gmail.com</a></span>
-  <a class="gh-blink" href="https://github.com/burademirung/aiharness" target="_blank" rel="noopener" aria-label="View the source on GitHub">
+  <a class="gh-blink" href="https://github.com/burademirung/aiharness" target="_blank" rel="noopener noreferrer" aria-label="View the source on GitHub">
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
     <span>Source on GitHub</span>
   </a>
@@ -244,7 +245,7 @@
           <ul>
             <li><a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF (AI 100-1)</a></li>
             <li><a href="https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence" target="_blank" rel="noopener noreferrer">Gen-AI Profile (NIST AI 600-1)</a></li>
-            <li><a href="https://www.iso.org/standard/42001" target="_blank" rel="noopener noreferrer">ISO/IEC 42001:2023</a></li>
+            <li><a href="https://www.iso.org/standard/42001" target="_blank" rel="noopener noreferrer">ISO/IEC 42001:2023</a> <span class="std-note" aria-label="reference only">(ref)</span></li>
           </ul>
         </article>
         <article class="std-card reveal">
@@ -258,8 +259,8 @@
         <article class="std-card reveal">
           <h3>Organizational security</h3>
           <ul>
-            <li><a href="https://www.iso.org/standard/27001" target="_blank" rel="noopener noreferrer">ISO/IEC 27001</a></li>
-            <li><a href="https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2" target="_blank" rel="noopener noreferrer">SOC 2</a></li>
+            <li><a href="https://www.iso.org/standard/27001" target="_blank" rel="noopener noreferrer">ISO/IEC 27001</a> <span class="std-note" aria-label="reference only">(ref)</span></li>
+            <li><a href="https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2" target="_blank" rel="noopener noreferrer">SOC 2</a> <span class="std-note" aria-label="reference only">(ref)</span></li>
             <li><a href="https://www.nist.gov/cyberframework" target="_blank" rel="noopener noreferrer">NIST CSF 2.0</a></li>
           </ul>
         </article>
@@ -277,6 +278,7 @@
         </article>
       </div>
       <p class="std-footnote reveal">Executive Order 14110 was revoked in Jan 2025 — we align to SSDF / AI-RMF on technical merit, not the executive order.</p>
+      <p class="std-footnote reveal">Standards marked <em>(ref)</em> — ISO/IEC 27001, ISO/IEC 42001, and SOC 2 — are references and alignment targets, not certifications held.</p>
     </div>
   </section>
 
@@ -298,7 +300,7 @@
         </article>
         <article class="uc-card reveal">
           <h3>OT / ICS repo review</h3>
-          <p>Review operational-technology repositories with findings mapped to <strong>ISA/IEC 62443</strong> — built for critical-infrastructure scrutiny.</p>
+          <p>Review operational-technology repositories aligned to <strong>ISA/IEC 62443</strong> — ISA/IEC 62443 control mapping is planned (roadmap). Built for critical-infrastructure scrutiny.</p>
         </article>
         <article class="uc-card reveal">
           <h3>Second opinion over existing SAST</h3>
@@ -341,11 +343,11 @@
       <div class="self-grid">
         <div class="self-stat reveal"><span class="self-num">0</span><span class="self-label">production-dependency vulnerabilities</span></div>
         <div class="self-stat reveal"><span class="self-num">148</span><span class="self-label">components in our CycloneDX SBOM</span></div>
-        <div class="self-stat reveal"><span class="self-num">2.1.0</span><span class="self-label">SARIF output, schema-validated in CI</span></div>
+        <div class="self-stat reveal"><span class="self-num">2.1.0</span><span class="self-label">SARIF output, schema-validated by automated test</span></div>
       </div>
       <ul class="self-list reveal">
         <li>Manual review clean: BYO-key lifecycle, container path-traversal guard, parameterized SQL, XSS-safe DOM.</li>
-        <li>Our SARIF output is validated against the official SARIF 2.1.0 JSON schema in CI.</li>
+        <li>Our SARIF output is validated by an automated test (ajv vs the official SARIF 2.1.0 schema).</li>
         <li>A CycloneDX SBOM (148 components) is generated as part of the build.</li>
         <li>LLM-only findings are labeled &ldquo;needs review&rdquo; — we don't overclaim.</li>
       </ul>
